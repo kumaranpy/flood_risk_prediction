@@ -1,18 +1,53 @@
-import pandas as pd
-import numpy as np
+import csv
+import json
 from pathlib import Path
 import joblib
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "flood_factors.csv"
 PROCESSED_DATA_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned.csv"
-SCALER_PATH = PROJECT_ROOT / "models" / "scaler.pkl"
-ENCODERS_PATH = PROJECT_ROOT / "models" / "encoders.pkl"
+MODELS_DIR = PROJECT_ROOT / "models"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+PROCESSED_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+SCALER_PATH = MODELS_DIR / "scaler.pkl"
+ENCODERS_PATH = MODELS_DIR / "encoders.pkl"
+TARGET_ENCODER_PATH = MODELS_DIR / "target_encoder.pkl"
+
+
+def detect_file_properties(file_path: Path):
+    """
+    FR-01: Auto-detect dataset delimiter and file encoding.
+    Attempts standard encodings and uses csv.Sniffer for delimiter detection.
+    """
+    candidate_encodings = ["utf-8", "utf-8-sig", "cp1252", "latin-1"]
+    detected_encoding = "utf-8"
+    detected_delimiter = ","
+
+    for enc in candidate_encodings:
+        try:
+            with open(file_path, "r", encoding=enc) as f:
+                sample = f.read(8192)
+                detected_encoding = enc
+                try:
+                    sniffer = csv.Sniffer()
+                    dialect = sniffer.sniff(sample, delimiters=[",", ";", "\t", "|"])
+                    detected_delimiter = dialect.delimiter
+                except Exception:
+                    # Fallback to comma if sniffing dialect fails
+                    detected_delimiter = ","
+                break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+
+    return detected_delimiter, detected_encoding
 
 
 def auto_detect_target(df: pd.DataFrame) -> str:
-    """Auto-detect target column: last column or column with risk/flood/label in name."""
+    """Auto-detect target column: last column or column matching target keywords."""
     target_keywords = ["risk", "flood", "label", "target", "probability", "class"]
     for col in df.columns:
         if any(kw in col.lower() for kw in target_keywords):
@@ -20,19 +55,41 @@ def auto_detect_target(df: pd.DataFrame) -> str:
     return df.columns[-1]
 
 
+def discretize_target(y_series: pd.Series) -> pd.Series:
+    """
+    Converts target into discrete risk classes: Low, Medium, High.
+    If continuous (float), bins into balanced tertiles:
+      - Low: <= 0.475 (~33rd percentile)
+      - Medium: 0.475 to 0.520
+      - High: > 0.520 (~67th percentile)
+    If already categorical/string, normalizes casing.
+    """
+    if np.issubdtype(y_series.dtype, np.floating) or np.issubdtype(y_series.dtype, np.integer):
+        if y_series.nunique() > 10:
+            bins = [-float("inf"), 0.475, 0.520, float("inf")]
+            labels = ["Low", "Medium", "High"]
+            discretized = pd.cut(y_series, bins=bins, labels=labels)
+            return discretized.astype(str)
+    return y_series.astype(str)
+
+
 def run_preprocessing():
+    """
+    End-to-end Phase 1 preprocessing function meeting requirements FR-01 through FR-06.
+    """
     print("=" * 60)
     print("PHASE 1: PREPROCESSING STARTED")
     print("=" * 60)
 
-    print(f"\nLoading data from: {RAW_DATA_PATH}")
-    df = pd.read_csv(RAW_DATA_PATH)
+    # FR-01: Auto-detect delimiter and encoding
+    delimiter, encoding = detect_file_properties(RAW_DATA_PATH)
+    print(f"FR-01: Detected Delimiter: '{delimiter}' | Encoding: '{encoding}'")
+    print(f"Loading data from: {RAW_DATA_PATH}")
+    df = pd.read_csv(RAW_DATA_PATH, delimiter=delimiter, encoding=encoding)
 
-    print(f"\n--- INITIAL DATA INFO ---")
+    print("\n--- INITIAL DATA INFO ---")
     print(f"Shape: {df.shape}")
-    print(f"Columns: {list(df.columns)}")
-    print(f"Dtypes:\n{df.dtypes}")
-    print(f"Null counts:\n{df.isnull().sum()}")
+    print(f"Null counts total: {df.isnull().sum().sum()}")
     print(f"Duplicate rows: {df.duplicated().sum()}")
 
     target_col = auto_detect_target(df)
@@ -40,72 +97,75 @@ def run_preprocessing():
 
     feature_cols = [c for c in df.columns if c != target_col]
     X = df[feature_cols].copy()
-    y = df[target_col].copy()
+    raw_y = df[target_col].copy()
 
-    print(f"\nFeature columns ({len(feature_cols)}): {feature_cols}")
-    print(f"Target distribution:\n{y.value_counts().sort_index()}")
+    # Discretize continuous target to Low, Medium, High
+    y_discrete = discretize_target(raw_y)
+    target_encoder = LabelEncoder()
+    # Explicitly fit with standard ordering: Low=0, Medium=1, High=2
+    target_encoder.fit(["Low", "Medium", "High"])
+    print(f"Target classes: {target_encoder.classes_}")
+    print(f"Target class distribution:\n{y_discrete.value_counts(normalize=True)}")
 
-    print("\n--- HANDLING MISSING VALUES ---")
+    joblib.dump(target_encoder, TARGET_ENCODER_PATH)
+
+    # FR-02: Handling missing values (median for numeric, mode for categorical)
+    print("\n--- HANDLING MISSING VALUES (FR-02) ---")
     numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
     categorical_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
-
-    print(f"Numeric columns: {numeric_cols}")
-    print(f"Categorical columns: {categorical_cols}")
 
     for col in numeric_cols:
         if X[col].isnull().any():
             median_val = X[col].median()
-            X[col].fillna(median_val, inplace=True)
-            print(f"  Filled {col} missing with median: {median_val:.4f}")
+            X[col] = X[col].fillna(median_val)
+            print(f"  Imputed {col} missing with median: {median_val:.4f}")
 
     for col in categorical_cols:
         if X[col].isnull().any():
             mode_val = X[col].mode()[0] if not X[col].mode().empty else "unknown"
-            X[col].fillna(mode_val, inplace=True)
-            print(f"  Filled {col} missing with mode: {mode_val}")
+            X[col] = X[col].fillna(mode_val)
+            print(f"  Imputed {col} missing with mode: {mode_val}")
 
-    print("\n--- CAPPING OUTLIERS (IQR 1.5x) ---")
+    # FR-03: Capping outliers using IQR 1.5x rule
+    print("\n--- CAPPING OUTLIERS (IQR 1.5x) (FR-03) ---")
+    capped_count = 0
     for col in numeric_cols:
-        Q1 = X[col].quantile(0.25)
-        Q3 = X[col].quantile(0.75)
-        IQR = Q3 - Q1
-        lower = Q1 - 1.5 * IQR
-        upper = Q3 + 1.5 * IQR
-        outliers_before = ((X[col] < lower) | (X[col] > upper)).sum()
-        if outliers_before > 0:
+        q1 = X[col].quantile(0.25)
+        q3 = X[col].quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        outliers = ((X[col] < lower) | (X[col] > upper)).sum()
+        if outliers > 0:
             X[col] = X[col].clip(lower, upper)
-            print(f"  {col}: capped {outliers_before} outliers to [{lower:.4f}, {upper:.4f}]")
+            capped_count += outliers
+            print(f"  {col}: capped {outliers} outliers to [{lower:.2f}, {upper:.2f}]")
+    if capped_count == 0:
+        print("  No extreme outliers beyond 1.5x IQR.")
 
-    print("\n--- ENCODING CATEGORICAL COLUMNS ---")
+    # FR-04: Auto-encode categorical columns
+    print("\n--- ENCODING CATEGORICAL COLUMNS (FR-04) ---")
     encoders = {}
     for col in categorical_cols:
         le = LabelEncoder()
         X[col] = le.fit_transform(X[col].astype(str))
         encoders[col] = le
-        print(f"  Label encoded: {col} ({len(le.classes_)} classes)")
+        print(f"  Encoded {col} ({len(le.classes_)} classes)")
+    joblib.dump(encoders, ENCODERS_PATH)
 
-    if len(categorical_cols) == 0:
-        print("  No categorical columns to encode.")
-
-    print("\n--- SCALING NUMERIC FEATURES ---")
+    # FR-05: Apply StandardScaler to numeric features
+    print("\n--- SCALING NUMERIC FEATURES (FR-05) ---")
     scaler = StandardScaler()
     X[numeric_cols] = scaler.fit_transform(X[numeric_cols])
-    print(f"  Applied StandardScaler to {len(numeric_cols)} numeric columns")
-
     joblib.dump(scaler, SCALER_PATH)
-    joblib.dump(encoders, ENCODERS_PATH)
-    print(f"  Saved scaler to: {SCALER_PATH}")
-    print(f"  Saved encoders to: {ENCODERS_PATH}")
+    print(f"  Saved fitted scaler to: {SCALER_PATH}")
 
+    # FR-06: Save cleaned data
     cleaned_df = X.copy()
-    cleaned_df[target_col] = y.values
+    cleaned_df[target_col] = y_discrete.values
     cleaned_df.to_csv(PROCESSED_DATA_PATH, index=False)
-
-    print(f"\n--- PREPROCESSING COMPLETE ---")
-    print(f"Original shape: {df.shape}")
+    print(f"\nFR-06: Saved cleaned dataset to: {PROCESSED_DATA_PATH}")
     print(f"Cleaned shape: {cleaned_df.shape}")
-    print(f"Null count after: {cleaned_df.isnull().sum().sum()}")
-    print(f"Saved cleaned data to: {PROCESSED_DATA_PATH}")
 
     print("=" * 60)
     print("PHASE 1: PREPROCESSING COMPLETED")
