@@ -1,7 +1,7 @@
 {
   "model_version": "1.0.0",
-  "git_commit_sha": "unknown",
-  "training_timestamp": "2026-09-18T09:27:41.577117Z",
+  "git_commit_sha": "160557de8a179547f51664b091bf2ac09495e8dc",
+  "training_timestamp": "2026-09-17T19:26:31.174005Z",
   "model_name": "LogisticRegression",
   "cv_f1_weighted": 0.7040176053120251,
   "cv_f1_std": 0.011343948338421016,
@@ -49,5 +49,5 @@
   "test_brier_score": 0.3811,
   "test_accuracy": 0.7134,
   "test_roc_auc": 0.8781,
-  "evaluation_timestamp": "2026-09-18T09:28:33.471439+00:00Z"
+  "evaluation_timestamp": "2026-09-17T19:26:38.169428+00:00Z"
 }

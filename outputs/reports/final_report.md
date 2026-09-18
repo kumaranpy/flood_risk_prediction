@@ -24,7 +24,7 @@ The system classifies regions into **Low**, **Medium**, or **High** risk levels 
    - Test partition `data/splits/test.csv` was preserved in unscaled feature space and evaluated strictly once.
 3. **Parity & Serialization Security (F-05, SEC-01)**:
    - Artifacts are verified against SHA-256 hashes in `models/checksums.json` before deserialization.
-   - Raw single-instance inputs are passed directly to `models/best_pipeline.pkl` without ad-hoc scaling.
+   - Raw single-instance inputs are passed directly to `models/v1/best_pipeline.pkl` without ad-hoc scaling.
 
 ---
 
@@ -35,8 +35,8 @@ The system classifies regions into **Low**, **Medium**, or **High** risk levels 
 | 1 | **best_pipeline** | 0.7134 | **0.7130** | 0.7155 | 0.8781 | 0.3811 |
 | 2 | **LogisticRegression** | 0.7134 | **0.7130** | 0.7155 | 0.8781 | 0.3811 |
 | 3 | **LightGBM** | 0.7091 | **0.7090** | 0.7115 | 0.8735 | 0.3875 |
-| 4 | **XGBoost** | 0.7023 | **0.7038** | 0.7062 | 0.8706 | 0.3915 |
-| 5 | **RandomForest** | 0.6765 | **0.6767** | 0.6793 | 0.8485 | 0.4312 |
+| 4 | **XGBoost** | 0.7005 | **0.7018** | 0.7042 | 0.8696 | 0.3927 |
+| 5 | **RandomForest** | 0.6746 | **0.6753** | 0.6778 | 0.8480 | 0.4315 |
 | 6 | **KNN** | 0.6349 | **0.6333** | 0.6361 | 0.8152 | 0.4649 |
 
 ---

@@ -24,20 +24,24 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest
 
     - name: Run Data Preparation & Splitting
       run: |
-        python src/preprocess.py
+        python src/data/preprocess.py
 
     - name: Train & Calibrate ML Pipeline
       run: |
-        python src/train.py
+        python src/models/train.py
 
     - name: Evaluate on Untouched Test Split
       run: |
-        python src/evaluate.py
+        python src/models/evaluate.py
 
     - name: Run Test Suite (Target Leakage, Pipeline Parity, Data Quality)
       run: |
-        pytest tests/ -v
+        pytest tests/ -v --tb=short
+
+    - name: Lint with ruff
+      run: |
+        pip install ruff
+        ruff check src/ api/ app/ tests/ --ignore E501 || true

@@ -1,0 +1,42 @@
+model:
+  type: logistic_regression
+  params:
+    C: 1.0
+    max_iter: 1000
+    class_weight:
+      0: 1.0
+      1: 1.0
+      2: 1.5         # Prioritize High-risk class
+
+training:
+  test_size: 0.2
+  random_state: 42
+  cv_folds: 5
+  n_jobs: -1
+
+threshold:
+  decision_threshold: 0.65
+  uncertain_label: "UNCERTAIN"
+
+features:
+  n_select: 12
+  correlation_cutoff: 0.90
+  vulnerability_weights:
+    rainfall: 0.35
+    elevation: 0.25
+    river_proximity: 0.20
+    historical_floods: 0.20
+
+monitoring:
+  drift_threshold: 0.20
+  psi_threshold: 0.10
+  alert_on_drift: true
+
+paths:
+  raw_data: data/raw/
+  splits: data/splits/
+  models: models/v1/
+  outputs: outputs/
+  plots: outputs/plots/
+  reports: outputs/reports/
+  logs: logs/

@@ -1,11 +1,43 @@
+# Core ML & Data Science
 pandas==2.2.2
 numpy==1.26.4
 scikit-learn==1.5.1
+scipy==1.13.1
 xgboost==2.1.1
 lightgbm==4.4.0
-matplotlib>=3.9.0
+
+# Statistical & Explainability
+statsmodels==0.14.1
+shap==0.44.0
+
+# Visualization
+matplotlib==3.9.0
 seaborn==0.13.2
+plotly==5.18.0
+
+# Web Framework
 streamlit==1.37.1
+fastapi==0.109.0
+uvicorn==0.27.0
+
+# Validation & Serialization
+pydantic==2.5.3
+pydantic-settings==2.1.0
 joblib==1.4.2
-scipy==1.13.1
-pytest>=8.0.0
+pyyaml==6.0.1
+
+# Monitoring & Logging
+tqdm==4.66.1
+
+# Testing
+pytest==8.0.0
+pytest-cov==4.1.0
+httpx==0.28.1
+python-multipart==0.0.9
+anyio[trio]
+
+# Code Quality
+ruff==0.5.0
+black==24.4.2
+isort==5.13.2
+pre-commit==4.0.1

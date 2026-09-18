@@ -18,7 +18,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.predict import (
+from src.config import get_paths
+from src.models.predict import (
     EXPECTED_RAW_FEATURES,
     SecurityError,
     load_verified_pipeline,
@@ -103,5 +104,11 @@ def test_sha256_checksum_security_verification(tmp_path):
     corrupted_artifact = tmp_path / "best_pipeline.pkl"
     corrupted_artifact.write_bytes(b"MALICIOUS_OR_CORRUPTED_PAYLOAD")
 
+    from src.models.predict import SecurityError
     with pytest.raises(SecurityError):
+        from src.models.predict import load_verified_pipeline
         load_verified_pipeline(corrupted_artifact)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

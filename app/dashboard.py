@@ -2,7 +2,7 @@
 Interactive Flood Risk Assessment Dashboard.
 
 Architectural Guarantees:
-  1. Parity: Passes raw user slider inputs directly into models/best_pipeline.pkl.
+  1. Parity: Passes raw user slider inputs directly into models/v1/best_pipeline.pkl.
   2. Security: Verifies SHA-256 checksum against models/checksums.json before loading.
   3. Safety & Compliance (F-10): Prominently renders academic simulation disclaimer;
      prohibits operational directives (no evacuation or spillway orders).
@@ -11,9 +11,10 @@ Architectural Guarantees:
 
 import hashlib
 import json
+import time
 from pathlib import Path
 import sys
-import time
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -23,15 +24,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.config import get_paths
 from src.features import DOMAIN_FEATURE_DEFINITIONS, compute_domain_features_dict
-from src.predict import EXPECTED_RAW_FEATURES, load_verified_pipeline, predict_single_instance, SecurityError
+from src.models.predict import EXPECTED_RAW_FEATURES, load_verified_pipeline, predict_single_instance, SecurityError
+from src.utils.logger import setup_logging, get_logger
+from app.utils import inject_global_css, render_hero, render_disclaimer, render_sidebar_navigation
 
-MODELS_DIR = PROJECT_ROOT / "models"
-REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
-PLOTS_DIR = PROJECT_ROOT / "outputs" / "plots"
+setup_logging()
+logger = get_logger(__name__)
+
+MODELS_DIR = get_paths()["models"]
+REPORTS_DIR = get_paths()["reports"]
+PLOTS_DIR = get_paths()["plots"]
 BEST_PIPELINE_PATH = MODELS_DIR / "best_pipeline.pkl"
-COMPARISON_CSV_PATH = REPORTS_DIR / "model_comparison.csv"
-CHECKSUMS_PATH = MODELS_DIR / "checksums.json"
+COMPARISON_CSV_PATH = get_paths()["reports"] / "model_comparison.csv"
+CHECKSUMS_PATH = MODELS_DIR.parent / "checksums.json"
 
 # Predefined input features with their display names and descriptions
 ALL_INPUT_FACTORS = {
@@ -89,133 +96,9 @@ PRESETS = {
 @st.cache_resource
 def load_ml_assets():
     """Securely loads and verifies the trained ML pipeline artifact."""
-    pipeline = load_verified_pipeline(BEST_PIPELINE_PATH)
-    comparison_df = pd.read_csv(COMPARISON_CSV_PATH) if COMPARISON_CSV_PATH.exists() else None
+    pipeline = load_verified_pipeline()
+    comparison_df = pd.read_csv(get_paths()["reports"] / "model_comparison.csv") if (get_paths()["reports"] / "model_comparison.csv").exists() else None
     return pipeline, comparison_df
-
-
-def inject_custom_css():
-    """Injects modern dark-mode styles and glassmorphism."""
-    st.markdown(
-        """
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-
-        html, body, [class*="css"] {
-            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-
-        .hero-banner {
-            background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 50%, rgba(30, 41, 59, 0.85) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 24px 32px;
-            margin-bottom: 20px;
-            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(12px);
-        }
-
-        .badge-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(56, 189, 248, 0.15);
-            color: #38BDF8;
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            border-radius: 9999px;
-            padding: 4px 14px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-
-        .disclaimer-banner {
-            background: rgba(239, 68, 68, 0.12);
-            border: 1px solid rgba(239, 68, 68, 0.35);
-            border-radius: 12px;
-            padding: 14px 20px;
-            margin-bottom: 24px;
-            color: #FCA5A5;
-            font-size: 0.88rem;
-            line-height: 1.45;
-        }
-
-        .glass-card {
-            background: rgba(17, 24, 39, 0.75);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 18px 20px;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-        }
-
-        .metric-val {
-            font-size: 2.0rem;
-            font-weight: 800;
-            font-family: 'JetBrains Mono', monospace;
-            line-height: 1.1;
-        }
-
-        .metric-lbl {
-            font-size: 0.78rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #94A3B8;
-            font-weight: 600;
-            margin-top: 4px;
-        }
-
-        .risk-banner-high {
-            background: linear-gradient(135deg, rgba(127, 29, 29, 0.85) 0%, rgba(185, 28, 28, 0.75) 100%);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            border-radius: 16px;
-            padding: 22px 26px;
-            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.25);
-        }
-
-        .risk-banner-medium {
-            background: linear-gradient(135deg, rgba(120, 53, 15, 0.85) 0%, rgba(180, 83, 9, 0.75) 100%);
-            border: 1px solid rgba(245, 158, 11, 0.4);
-            border-radius: 16px;
-            padding: 22px 26px;
-            box-shadow: 0 10px 30px rgba(245, 158, 11, 0.25);
-        }
-
-        .risk-banner-low {
-            background: linear-gradient(135deg, rgba(6, 78, 59, 0.85) 0%, rgba(16, 185, 129, 0.65) 100%);
-            border: 1px solid rgba(16, 185, 129, 0.4);
-            border-radius: 16px;
-            padding: 22px 26px;
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.25);
-        }
-
-        .prob-bar-container {
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 999px;
-            height: 8px;
-            overflow: hidden;
-            margin-top: 6px;
-            margin-bottom: 12px;
-        }
-
-        .prob-bar-fill {
-            height: 100%;
-            border-radius: 999px;
-            transition: width 0.4s ease;
-        }
-
-        .prob-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.86rem;
-            font-weight: 600;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def main():
@@ -226,7 +109,7 @@ def main():
         initial_sidebar_state="expanded",
     )
 
-    inject_custom_css()
+    inject_global_css()
 
     # Load Assets with Security Error Handling
     try:
@@ -239,59 +122,22 @@ def main():
         st.stop()
 
     # Hero Banner
-    st.markdown(
-        """
-        <div class="hero-banner">
-            <div class="badge-pill">🛡️ Academic AI Benchmark & Simulation</div>
-            <h1 style="margin: 0 0 6px 0; font-size: 2.2rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em;">
-                Regional Flood Risk Intelligence System
-            </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 0.95rem; max-width: 900px; line-height: 1.5;">
-                Real-time ML risk assessment classifying regions into Low, Medium, or High categories
-                using calibrated ensemble pipelines trained on synthetic benchmark environmental factors.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_hero(
+        title="Regional Flood Risk Intelligence System",
+        subtitle="Real-time ML risk assessment classifying regions into Low, Medium, or High categories using calibrated ensemble pipelines trained on synthetic benchmark environmental factors.",
+        badge_text="🛡️ Academic AI Benchmark & Simulation",
+        badge_class="badge-simulation"
     )
 
     # MANDATORY DISCLAIMER BANNER (F-10 / Operational Safety)
-    st.markdown(
-        """
-        <div class="disclaimer-banner">
-            <b style="color: #F87171; text-transform: uppercase; font-size: 0.86rem; letter-spacing: 0.05em;">⚠️ SIMULATION ONLY:</b>
-            This system is an academic demonstration trained on synthetic benchmark data (Kaggle Playground s4e5).
-            It must <b>NOT</b> be used for operational disaster management, early-warning deployment, or life-safety decisions.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_disclaimer()
 
     # Initialize Session State
     if "input_state" not in st.session_state:
         st.session_state.input_state = {k: v[4] for k, v in ALL_INPUT_FACTORS.items()}
 
-    # Sidebar: Scenario Presets
-    with st.sidebar:
-        st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:8px;'>⚡ Scenario Presets</h3>", unsafe_allow_html=True)
-        st.caption("Apply standard simulated profiles to explore model sensitivity.")
-
-        for preset_name, preset_vals in PRESETS.items():
-            if st.button(preset_name, use_container_width=True):
-                for k, v in preset_vals.items():
-                    st.session_state.input_state[k] = v
-                st.rerun()
-
-        st.markdown("---")
-        st.markdown("<h4 style='color:#E2E8F0; font-weight:600;'>System & Pipeline Info</h4>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            - **Pipeline**: `CalibratedClassifierCV`
-            - **Target**: Discretized Tertiles (`Low`, `Medium`, `High`)
-            - **Integrity**: SHA-256 Verified (`checksums.json`)
-            - **Preprocessing**: Fold-Safe In-Pipeline Scaling
-            """
-        )
+    # Sidebar: Navigation & System Info
+    render_sidebar_navigation()
 
     # Main Grid: Inputs (Left) and Live Assessment (Right)
     col_inputs, col_pred = st.columns([1.15, 1.0], gap="large")
@@ -371,6 +217,14 @@ def main():
                 "tag": "NOMINAL RISK SIMULATION",
                 "summary": "Simulated parameters fall within standard baseline containment bounds.",
                 "note": "Parameters reflect typical seasonal stability."
+            },
+            "UNCERTAIN": {
+                "class_name": "risk-banner-medium",
+                "emoji": "⚪",
+                "color": "#94A3B8",
+                "tag": "UNCERTAIN - LOW CONFIDENCE",
+                "summary": "Model confidence below decision threshold (65%). Prediction withheld for safety.",
+                "note": "Request additional data or human expert review."
             },
         }
         cfg = risk_configs.get(pred_class, risk_configs["Medium"])
@@ -495,7 +349,7 @@ def main():
             """
             - **Zero Target Proxy Leakage**: No row-wise global aggregations ($|r| < 0.85$).
             - **Fold-Safe Pipeline**: Preprocessing & scaling fit strictly within training folds.
-            - **Calibrated Probabilities**: Sigmoid/isotonic calibration prevents overconfidence.
+            - **Calibrated Probabilities**: Native (LogReg) / Sigmoid-Isotonic calibration prevents overconfidence.
             - **Cryptographic Guardrails**: SHA-256 verified deserialization blocks untrusted pickles.
             """
         )

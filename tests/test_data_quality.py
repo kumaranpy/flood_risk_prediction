@@ -20,11 +20,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
-SPLITS_DIR = PROJECT_ROOT / "data" / "splits"
-TRAIN_SPLIT_PATH = SPLITS_DIR / "train.csv"
-TEST_SPLIT_PATH = SPLITS_DIR / "test.csv"
-TARGET_BINS_PATH = PROJECT_ROOT / "models" / "target_bins.json"
+from src.config import get_paths
+
+RAW_DATA_DIR = get_paths()["raw_data"]
+SPLITS_DIR = get_paths()["splits"]
+TRAIN_SPLIT_PATH = get_paths()["splits"] / "train.csv"
+TEST_SPLIT_PATH = get_paths()["splits"] / "test.csv"
+TARGET_BINS_PATH = get_paths()["models"].parent / "target_bins.json"
 
 
 def test_dead_raw_csv_files_deleted():
@@ -101,3 +103,21 @@ def test_target_bins_file_validity():
     assert "p33" in bins and "p67" in bins
     assert bins["p33"] < bins["p67"]
     assert bins["classes"] == ["Low", "Medium", "High"]
+
+
+def test_no_row_proxy_features():
+    """Verify that Row_Sum, Row_Mean, Row_Std, Row_Min, Row_Max are absent from engineered features."""
+    train_df = pd.read_csv(TRAIN_SPLIT_PATH)
+    feature_cols = [c for c in train_df.columns if c not in ["FloodProbability_raw", "RiskLevel"]]
+
+    from src.features import DomainFeatureAdder
+    adder = DomainFeatureAdder()
+    transformed = adder.fit_transform(train_df[feature_cols])
+
+    forbidden_features = ["Row_Sum", "Row_Mean", "Row_Std", "Row_Min", "Row_Max"]
+    for feat in forbidden_features:
+        assert feat not in transformed.columns, f"Proxy leakage feature '{feat}' found in engineered features!"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

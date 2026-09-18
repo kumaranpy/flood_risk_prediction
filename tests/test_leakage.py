@@ -17,8 +17,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-TRAIN_SPLIT_PATH = PROJECT_ROOT / "data" / "splits" / "train.csv"
-TEST_SPLIT_PATH = PROJECT_ROOT / "data" / "splits" / "test.csv"
+from src.config import get_paths
+
+TRAIN_SPLIT_PATH = get_paths()["splits"] / "train.csv"
+TEST_SPLIT_PATH = get_paths()["splits"] / "test.csv"
 from src.features import DOMAIN_FEATURE_DEFINITIONS, DomainFeatureAdder
 
 
@@ -103,3 +105,7 @@ def test_no_global_row_aggregates_in_engineered_features():
     forbidden_features = ["Row_Sum", "Row_Mean", "Row_Std", "Row_Min", "Row_Max"]
     for feat in forbidden_features:
         assert feat not in transformed.columns, f"Proxy leakage feature '{feat}' found in engineered features!"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
