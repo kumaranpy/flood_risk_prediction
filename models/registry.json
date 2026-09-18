@@ -1,0 +1,53 @@
+{
+  "model_version": "1.0.0",
+  "git_commit_sha": "160557de8a179547f51664b091bf2ac09495e8dc",
+  "training_timestamp": "2026-09-17T19:26:31.174005Z",
+  "model_name": "LogisticRegression",
+  "cv_f1_weighted": 0.7040176053120251,
+  "cv_f1_std": 0.011343948338421016,
+  "hyperparameters": {
+    "max_iter": 2000,
+    "class_weight": "balanced",
+    "random_state": 42
+  },
+  "n_features": 20,
+  "feature_list": [
+    "MonsoonIntensity",
+    "TopographyDrainage",
+    "RiverManagement",
+    "Deforestation",
+    "Urbanization",
+    "ClimateChange",
+    "DamsQuality",
+    "Siltation",
+    "AgriculturalPractices",
+    "Encroachments",
+    "IneffectiveDisasterPreparedness",
+    "DrainageSystems",
+    "CoastalVulnerability",
+    "Landslides",
+    "Watersheds",
+    "DeterioratingInfrastructure",
+    "PopulationScore",
+    "WetlandLoss",
+    "InadequatePlanning",
+    "PoliticalFactors"
+  ],
+  "target_bins": {
+    "p33": 0.475,
+    "p67": 0.52,
+    "classes": [
+      "Low",
+      "Medium",
+      "High"
+    ]
+  },
+  "training_samples": 40000,
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python_version": "3.11.6",
+  "test_f1_weighted": 0.713,
+  "test_brier_score": 0.3811,
+  "test_accuracy": 0.7134,
+  "test_roc_auc": 0.8781,
+  "evaluation_timestamp": "2026-09-17T19:26:38.169428+00:00Z"
+}

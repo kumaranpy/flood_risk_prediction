@@ -1,0 +1,9 @@
+{
+  "LogisticRegression_pipeline.pkl": "668d4986fafc59ccb364555ce4e8ef73cbd6106f1b91f0ba389ab9e7ca7737b2",
+  "RandomForest_pipeline.pkl": "5e25f4cecce3cac5bc4e63114d124c95431537705439549c5521a402c025ee82",
+  "XGBoost_pipeline.pkl": "ab37d31e02fdc6f08916a7e4ad820940f6dd7eb4f9203e0e1fc6c85ff172cf72",
+  "LightGBM_pipeline.pkl": "a98a279c90261765ef44cd211350afd31800b9a862d73eb6a87f604b4d597455",
+  "KNN_pipeline.pkl": "6d792285e6cbbdfe09060acfe5b97f946b99d367c42758f59263276631359f06",
+  "best_pipeline.pkl": "668d4986fafc59ccb364555ce4e8ef73cbd6106f1b91f0ba389ab9e7ca7737b2",
+  "best_model.pkl": "e0b7b86b22ffb7c670ae397e8b354940574d834a648514ef33e6d7ac1ddbd8ae"
+}

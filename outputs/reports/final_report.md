@@ -1,81 +1,53 @@
-# Comprehensive Flood Risk Prediction Evaluation Report
+# Production Model Evaluation Report: Flood Risk Prediction
 
 ## Executive Summary
-This report summarizes the machine learning pipeline developed to automate regional flood risk assessment.
-The objective is to accurately categorize geographic regions into **Low**, **Medium**, or **High** flood risk levels based on environmental, meteorological, and infrastructural predictors.
+This evaluation report benchmarks the refactored, leakage-free flood risk prediction system.
+The system classifies regions into **Low**, **Medium**, or **High** risk levels using 20 environmental and infrastructure predictors without synthetic target proxies or global scaling distortions.
 
-- **Primary Selected Model**: `RandomForest`
-- **Test Set F1-Score (Weighted)**: **`0.9873`** (Benchmark requirement $\ge 0.80$ exceeded)
-- **Test Set Accuracy**: **`98.73%`**
-- **Test Set ROC-AUC (OvR Macro)**: **`0.9973`**
-- **5-Fold Cross-Validation F1**: **`0.9873 \pm 0.0049`**
-
----
-
-## 1. Methodology & Data Pipeline
-
-### 1.1 Data Preprocessing (`src/preprocess.py`)
-- **Encoding & Delimiter Detection**: Auto-detection using `csv.Sniffer` for arbitrary delimiters and multi-encoding fallback (`utf-8`, `latin-1`).
-- **Missing Value Imputation**: Numeric columns imputed via median; categorical features via mode.
-- **Outlier Treatment**: Robust $1.5 \times \text{IQR}$ capping preventing noise distortion.
-- **Target Discretization**: Balanced tertile categorization into standard risk categories:
-  - **Low**: $\le 0.475$
-  - **Medium**: $0.475 - 0.520$
-  - **High**: $> 0.520$
-
-### 1.2 Feature Engineering (`src/features.py`)
-- **Multicollinearity Elimination**: Pairwise Pearson correlation threshold $r > 0.90$.
-- **Domain Indicators Engineered**:
-  - `Flood_Vulnerability_Score`: Weighted synthesis of Monsoon Intensity (0.35), Topography & Drainage (0.25), River Management (0.20), and Deforestation (0.20).
-  - `Infrastructure_Deficit_Score`: Mean deterioration across dams, drainage, and preparedness.
-  - `Environmental_Stress_Score`: Aggregate pressures from urbanization, climate change, and agricultural encroachment.
-  - `Aggregate_Hazard_Index`: Holistic risk composite.
-- **Feature Selection**: Top 12 predictors identified via ANOVA F-value (`SelectKBest`).
-
-### 1.3 Data Leakage Safeguards (NFR-06)
-`StandardScaler` was strictly fitted on the 80% training partition only, with test splits and real-time inputs transformed using saved parameters (`models/scaler.pkl`).
+- **Primary Pipeline**: `best_pipeline` (CalibratedClassifierCV)
+- **Held-out Test Instances**: **10,000**
+- **Test Accuracy**: **71.34%**
+- **Weighted F1-Score**: **0.7130**
+- **Macro F1-Score**: **0.7155**
+- **Multi-class ROC-AUC (OvR)**: **0.8781**
+- **Brier Reliability Score**: **0.3811** (Lower is better, verifies probability calibration)
 
 ---
 
-## 2. Model Performance Benchmark
+## 1. Architectural Integrity & Audit Remediations
 
-Evaluation conducted on a held-out test split of **3,000** samples across all 6 models:
+1. **Elimination of Target Proxy Leakage (F-01)**:
+   - `Aggregate_Hazard_Index` and all global feature aggregations have been removed.
+   - Tested and verified: No predictor in the feature space has $|r| \ge 0.85$ with `FloodProbability`.
+2. **Fold-Safe Pipeline Encapsulation (F-02, F-03, F-04)**:
+   - `OutlierCapper`, `DomainFeatureAdder`, `StandardScaler`, and `SelectKBest` are strictly fit within training folds.
+   - Test partition `data/splits/test.csv` was preserved in unscaled feature space and evaluated strictly once.
+3. **Parity & Serialization Security (F-05, SEC-01)**:
+   - Artifacts are verified against SHA-256 hashes in `models/checksums.json` before deserialization.
+   - Raw single-instance inputs are passed directly to `models/best_pipeline.pkl` without ad-hoc scaling.
 
-| Rank | Model | Accuracy | F1 (Weighted) | F1 (Macro) | ROC-AUC (OvR) | 5-Fold CV F1 |
+---
+
+## 2. Model Performance Benchmark (Held-out Test Split)
+
+| Rank | Model Pipeline | Accuracy | F1 (Weighted) | F1 (Macro) | ROC-AUC (OvR) | Brier Score |
 |:---:|:---|:---:|:---:|:---:|:---:|:---:|
-| 1 | **RandomForest** | 0.9873 | **0.9873** | 0.9874 | 0.9973 | 0.9873 $\pm$ 0.0049 |
-| 2 | **XGBoost** | 0.9863 | **0.9863** | 0.9864 | 0.9980 | 0.9840 $\pm$ 0.0031 |
-| 3 | **LightGBM** | 0.9853 | **0.9853** | 0.9854 | 0.9982 | 0.9850 $\pm$ 0.0043 |
-| 4 | **LogisticRegression** | 0.9830 | **0.9830** | 0.9830 | 0.9972 | 0.9727 $\pm$ 0.0050 |
-| 5 | **SVM** | 0.9623 | **0.9624** | 0.9626 | 0.9956 | 0.9263 $\pm$ 0.0094 |
-| 6 | **KNN** | 0.8210 | **0.8229** | 0.8240 | 0.9446 | 0.7858 $\pm$ 0.0130 |
+| 1 | **best_pipeline** | 0.7134 | **0.7130** | 0.7155 | 0.8781 | 0.3811 |
+| 2 | **LogisticRegression** | 0.7134 | **0.7130** | 0.7155 | 0.8781 | 0.3811 |
+| 3 | **LightGBM** | 0.7091 | **0.7090** | 0.7115 | 0.8735 | 0.3875 |
+| 4 | **XGBoost** | 0.7023 | **0.7038** | 0.7062 | 0.8706 | 0.3915 |
+| 5 | **RandomForest** | 0.6765 | **0.6767** | 0.6793 | 0.8485 | 0.4312 |
+| 6 | **KNN** | 0.6349 | **0.6333** | 0.6361 | 0.8152 | 0.4649 |
 
 ---
 
-## 3. Detailed Model Analysis
-
-### 3.1 Best Performing Model: `RandomForest`
-- **Generalization**: Demonstrates high stability with negligible variance between cross-validation (0.9873) and hold-out test performance (0.9873).
-- **Discrimination**: Achieved strong One-vs-Rest AUC (0.9973), effectively separating borderline Medium risk cases from acute High risk situations.
-
-### 3.2 Key Predictor Importances
-The most influential drivers governing flood classification are:
-1. `Aggregate_Hazard_Index` — Primary baseline predictor of regional vulnerability.
-2. `Flood_Vulnerability_Score` — Weighted interaction between monsoon rainfall and river drainage.
-3. `Environmental_Stress_Score` — Urbanization and agricultural pressure indicators.
-4. `Infrastructure_Deficit_Score` — Quality of flood mitigation defenses and dams.
+## 3. Visual Artifacts
+Visualizations generated and saved to `outputs/plots/`:
+- **Confusion Matrix**: `outputs/plots/cm_best_pipeline.png`
+- **One-vs-Rest ROC Curve**: `outputs/plots/roc_best_pipeline.png`
 
 ---
 
-## 4. Evaluation Visualizations Generated
-All artifacts are saved in `outputs/plots/`:
-- **Confusion Matrices**: `cm_RandomForest.png`, `cm_XGBoost.png`, `cm_LightGBM.png`, `cm_LogisticRegression.png`, `cm_SVM.png`, `cm_KNN.png`
-- **ROC Curves**: `roc_RandomForest.png`, `roc_XGBoost.png`, `roc_LightGBM.png`, etc.
-- **Feature Importances**: `feature_importance_RandomForest.png`, `feature_importance_XGBoost.png`, `feature_importance_LightGBM.png`
-
----
-
-## 5. Deployment & Operational Recommendations
-1. **Interactive Dashboard**: Operationalized via Streamlit (`app/dashboard.py`) for instantaneous inference ($< 0.1$s) and scenario simulation.
-2. **Confidence Thresholding**: Predictions with $< 60\%$ confidence should trigger expert hydrologist manual review.
-3. **Model Refresh**: Re-train periodically as seasonal monsoon patterns and land use changes evolve.
+## 4. Operational & Safety Notice
+> [!IMPORTANT]
+> **SIMULATION ONLY**: This model is trained on the Kaggle Playground Series s4e5 synthetic benchmark dataset. It must **NOT** be used for operational disaster management or life-safety decisions.

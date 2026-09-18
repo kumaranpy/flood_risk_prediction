@@ -1,20 +1,37 @@
-import time
+"""
+Interactive Flood Risk Assessment Dashboard.
+
+Architectural Guarantees:
+  1. Parity: Passes raw user slider inputs directly into models/best_pipeline.pkl.
+  2. Security: Verifies SHA-256 checksum against models/checksums.json before loading.
+  3. Safety & Compliance (F-10): Prominently renders academic simulation disclaimer;
+     prohibits operational directives (no evacuation or spillway orders).
+  4. Centralized Feature Logic (F-09): Derives domain indices strictly via src.features.
+"""
+
+import hashlib
+import json
 from pathlib import Path
+import sys
+import time
 import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.features import DOMAIN_FEATURE_DEFINITIONS, compute_domain_features_dict
+from src.predict import EXPECTED_RAW_FEATURES, load_verified_pipeline, predict_single_instance, SecurityError
+
 MODELS_DIR = PROJECT_ROOT / "models"
 REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
 PLOTS_DIR = PROJECT_ROOT / "outputs" / "plots"
-
-BEST_MODEL_PATH = MODELS_DIR / "best_model.pkl"
-SCALER_PATH = MODELS_DIR / "scaler.pkl"
-TARGET_ENCODER_PATH = MODELS_DIR / "target_encoder.pkl"
-SELECTED_FEATURES_PATH = MODELS_DIR / "selected_features.pkl"
+BEST_PIPELINE_PATH = MODELS_DIR / "best_pipeline.pkl"
 COMPARISON_CSV_PATH = REPORTS_DIR / "model_comparison.csv"
+CHECKSUMS_PATH = MODELS_DIR / "checksums.json"
 
 # Predefined input features with their display names and descriptions
 ALL_INPUT_FACTORS = {
@@ -42,7 +59,7 @@ ALL_INPUT_FACTORS = {
 
 # Quick scenario presets
 PRESETS = {
-    "🚨 Severe Monsoon & Dam Failure": {
+    "🚨 Severe Storm & Infrastructure Stress": {
         "MonsoonIntensity": 12.0, "TopographyDrainage": 10.0, "RiverManagement": 9.0, "Deforestation": 9.0,
         "Urbanization": 10.0, "ClimateChange": 11.0, "DamsQuality": 11.0, "Siltation": 10.0,
         "AgriculturalPractices": 8.0, "Encroachments": 9.0, "IneffectiveDisasterPreparedness": 10.0,
@@ -50,7 +67,7 @@ PRESETS = {
         "DeterioratingInfrastructure": 10.0, "PopulationScore": 10.0, "WetlandLoss": 9.0,
         "InadequatePlanning": 10.0, "PoliticalFactors": 8.0
     },
-    "🌊 Urban Flash Flood": {
+    "🌊 Urban Drainage Saturation": {
         "MonsoonIntensity": 9.0, "TopographyDrainage": 7.0, "RiverManagement": 6.0, "Deforestation": 5.0,
         "Urbanization": 11.0, "ClimateChange": 8.0, "DamsQuality": 5.0, "Siltation": 6.0,
         "AgriculturalPractices": 4.0, "Encroachments": 8.0, "IneffectiveDisasterPreparedness": 6.0,
@@ -58,7 +75,7 @@ PRESETS = {
         "DeterioratingInfrastructure": 7.0, "PopulationScore": 9.0, "WetlandLoss": 8.0,
         "InadequatePlanning": 9.0, "PoliticalFactors": 5.0
     },
-    "☀️ Normal Seasonal / Low Risk": {
+    "☀️ Nominal Seasonal Containment": {
         "MonsoonIntensity": 3.0, "TopographyDrainage": 2.0, "RiverManagement": 2.0, "Deforestation": 2.0,
         "Urbanization": 3.0, "ClimateChange": 2.0, "DamsQuality": 2.0, "Siltation": 2.0,
         "AgriculturalPractices": 2.0, "Encroachments": 1.0, "IneffectiveDisasterPreparedness": 2.0,
@@ -71,52 +88,14 @@ PRESETS = {
 
 @st.cache_resource
 def load_ml_assets():
-    """Caches and loads all ML models, encoders, scalers, and metadata."""
-    model = joblib.load(BEST_MODEL_PATH)
-    scaler = joblib.load(SCALER_PATH)
-    target_encoder = joblib.load(TARGET_ENCODER_PATH) if TARGET_ENCODER_PATH.exists() else None
-    selected_features = joblib.load(SELECTED_FEATURES_PATH)
+    """Securely loads and verifies the trained ML pipeline artifact."""
+    pipeline = load_verified_pipeline(BEST_PIPELINE_PATH)
     comparison_df = pd.read_csv(COMPARISON_CSV_PATH) if COMPARISON_CSV_PATH.exists() else None
-    return model, scaler, target_encoder, selected_features, comparison_df
-
-
-def compute_derived_indicators(inputs: dict) -> dict:
-    """Computes real-time composite indices matching features.py."""
-    data = dict(inputs)
-
-    # 1. Flood Vulnerability Score (FR-08)
-    weights = {
-        "MonsoonIntensity": 0.35,
-        "TopographyDrainage": 0.25,
-        "RiverManagement": 0.20,
-        "Deforestation": 0.20,
-    }
-    avail = {k: v for k, v in weights.items() if k in data}
-    if avail:
-        norm_w = {k: v / sum(avail.values()) for k, v in avail.items()}
-        data["Flood_Vulnerability_Score"] = sum(data[k] * w for k, w in norm_w.items())
-    else:
-        data["Flood_Vulnerability_Score"] = 5.0
-
-    # 2. Infrastructure Deficit Score
-    infra = ["DamsQuality", "DrainageSystems", "DeterioratingInfrastructure", "IneffectiveDisasterPreparedness"]
-    avail_infra = [data[c] for c in infra if c in data]
-    data["Infrastructure_Deficit_Score"] = float(np.mean(avail_infra)) if avail_infra else 5.0
-
-    # 3. Environmental Stress Score
-    env = ["Urbanization", "ClimateChange", "AgriculturalPractices", "Encroachments", "WetlandLoss"]
-    avail_env = [data[c] for c in env if c in data]
-    data["Environmental_Stress_Score"] = float(np.mean(avail_env)) if avail_env else 5.0
-
-    # 4. Aggregate Hazard Index
-    numeric_vals = [v for k, v in data.items() if isinstance(v, (int, float))]
-    data["Aggregate_Hazard_Index"] = float(np.mean(numeric_vals)) if numeric_vals else 5.0
-
-    return data
+    return pipeline, comparison_df
 
 
 def inject_custom_css():
-    """Injects high-end glassmorphism and modern dark-mode styles."""
+    """Injects modern dark-mode styles and glassmorphism."""
     st.markdown(
         """
         <style>
@@ -126,13 +105,12 @@ def inject_custom_css():
             font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
-        /* Top Hero Header Banner */
         .hero-banner {
             background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 50%, rgba(30, 41, 59, 0.85) 100%);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 20px;
-            padding: 28px 36px;
-            margin-bottom: 24px;
+            padding: 24px 32px;
+            margin-bottom: 20px;
             box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(12px);
         }
@@ -150,100 +128,89 @@ def inject_custom_css():
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
-        /* Glassmorphism Metric Cards */
+        .disclaimer-banner {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 24px;
+            color: #FCA5A5;
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
         .glass-card {
             background: rgba(17, 24, 39, 0.75);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-        .glass-card:hover {
-            border-color: rgba(56, 189, 248, 0.3);
-            transform: translateY(-2px);
+            padding: 18px 20px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
         }
 
-        /* Risk Banners */
+        .metric-val {
+            font-size: 2.0rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.1;
+        }
+
+        .metric-lbl {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94A3B8;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
         .risk-banner-high {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.35) 100%);
-            border: 2px solid #EF4444;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
-            animation: pulse-red 2.5s infinite;
+            background: linear-gradient(135deg, rgba(127, 29, 29, 0.85) 0%, rgba(185, 28, 28, 0.75) 100%);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 16px;
+            padding: 22px 26px;
+            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.25);
         }
 
         .risk-banner-medium {
-            background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(180, 83, 9, 0.35) 100%);
-            border: 2px solid #F59E0B;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);
-            animation: pulse-amber 2.5s infinite;
+            background: linear-gradient(135deg, rgba(120, 53, 15, 0.85) 0%, rgba(180, 83, 9, 0.75) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-radius: 16px;
+            padding: 22px 26px;
+            box-shadow: 0 10px 30px rgba(245, 158, 11, 0.25);
         }
 
         .risk-banner-low {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(4, 120, 87, 0.35) 100%);
-            border: 2px solid #10B981;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
-            animation: pulse-green 2.5s infinite;
+            background: linear-gradient(135deg, rgba(6, 78, 59, 0.85) 0%, rgba(16, 185, 129, 0.65) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 16px;
+            padding: 22px 26px;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.25);
         }
 
-        @keyframes pulse-red {
-            0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.25); }
-            50% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.55); }
-        }
-        @keyframes pulse-amber {
-            0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.25); }
-            50% { box-shadow: 0 0 35px rgba(245, 158, 11, 0.55); }
-        }
-        @keyframes pulse-green {
-            0%, 100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.25); }
-            50% { box-shadow: 0 0 35px rgba(16, 185, 129, 0.55); }
-        }
-
-        /* Custom Progress Bar Styling */
-        .prob-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 0.92rem;
-            font-weight: 600;
-        }
         .prob-bar-container {
-            height: 10px;
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.06);
             border-radius: 999px;
+            height: 8px;
             overflow: hidden;
-            margin-bottom: 16px;
+            margin-top: 6px;
+            margin-bottom: 12px;
         }
+
         .prob-bar-fill {
             height: 100%;
             border-radius: 999px;
-            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: width 0.4s ease;
         }
 
-        /* Clean metric numbers */
-        .metric-val {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #F8FAFC;
-        }
-        .metric-lbl {
-            font-size: 0.82rem;
-            color: #94A3B8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 4px;
+        .prob-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.86rem;
+            font-weight: 600;
         }
         </style>
         """,
@@ -253,57 +220,90 @@ def inject_custom_css():
 
 def main():
     st.set_page_config(
-        page_title="Flood Risk Prediction System | Early Warning AI",
+        page_title="Flood Risk Intelligence Dashboard",
         page_icon="🌊",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
     inject_custom_css()
-    model, scaler, target_encoder, selected_features, comparison_df = load_ml_assets()
+
+    # Load Assets with Security Error Handling
+    try:
+        pipeline, comparison_df = load_ml_assets()
+    except SecurityError as sec_err:
+        st.error(f"🚨 Security Error: {sec_err}")
+        st.stop()
+    except Exception as err:
+        st.error(f"Failed to load ML pipeline: {err}")
+        st.stop()
 
     # Hero Banner
     st.markdown(
         """
         <div class="hero-banner">
-            <span class="badge-pill">⚡ Early Warning System &bull; Production ML Pipeline</span>
-            <h1 style="margin: 0 0 8px 0; font-size: 2.2rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em;">
-                🌊 Regional Flood Risk Intelligence Platform
+            <div class="badge-pill">🛡️ Academic AI Benchmark & Simulation</div>
+            <h1 style="margin: 0 0 6px 0; font-size: 2.2rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em;">
+                Regional Flood Risk Intelligence System
             </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 1.05rem; max-width: 850px; line-height: 1.5;">
-                Real-time multi-hazard classification engine categorizing regional vulnerabilities into
-                <b>High</b>, <b>Medium</b>, and <b>Low</b> flood risk tiers using ensemble machine learning and hydrometeorological indicators.
+            <p style="margin: 0; color: #94A3B8; font-size: 0.95rem; max-width: 900px; line-height: 1.5;">
+                Real-time ML risk assessment classifying regions into Low, Medium, or High categories
+                using calibrated ensemble pipelines trained on synthetic benchmark environmental factors.
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # Initialize Session State for Inputs
+    # MANDATORY DISCLAIMER BANNER (F-10 / Operational Safety)
+    st.markdown(
+        """
+        <div class="disclaimer-banner">
+            <b style="color: #F87171; text-transform: uppercase; font-size: 0.86rem; letter-spacing: 0.05em;">⚠️ SIMULATION ONLY:</b>
+            This system is an academic demonstration trained on synthetic benchmark data (Kaggle Playground s4e5).
+            It must <b>NOT</b> be used for operational disaster management, early-warning deployment, or life-safety decisions.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Initialize Session State
     if "input_state" not in st.session_state:
         st.session_state.input_state = {k: v[4] for k, v in ALL_INPUT_FACTORS.items()}
 
-    # Preset Selector in Top Row
-    preset_cols = st.columns([1.2, 1, 1, 1])
-    with preset_cols[0]:
-        st.markdown("<p style='font-weight:700; color:#E2E8F0; margin-top:8px;'>⚡ Load Scenario Preset:</p>", unsafe_allow_html=True)
-    for i, (name, preset_vals) in enumerate(PRESETS.items()):
-        with preset_cols[i + 1]:
-            if st.button(name, use_container_width=True):
-                st.session_state.input_state.update(preset_vals)
+    # Sidebar: Scenario Presets
+    with st.sidebar:
+        st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:8px;'>⚡ Scenario Presets</h3>", unsafe_allow_html=True)
+        st.caption("Apply standard simulated profiles to explore model sensitivity.")
+
+        for preset_name, preset_vals in PRESETS.items():
+            if st.button(preset_name, use_container_width=True):
+                for k, v in preset_vals.items():
+                    st.session_state.input_state[k] = v
                 st.rerun()
 
-    # Main Layout: 2 Columns (Inputs Sidebar/Tabs on Left, Real-Time Prediction & Insights on Right)
-    col_input, col_pred = st.columns([1.1, 1.0], gap="large")
+        st.markdown("---")
+        st.markdown("<h4 style='color:#E2E8F0; font-weight:600;'>System & Pipeline Info</h4>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            - **Pipeline**: `CalibratedClassifierCV`
+            - **Target**: Discretized Tertiles (`Low`, `Medium`, `High`)
+            - **Integrity**: SHA-256 Verified (`checksums.json`)
+            - **Preprocessing**: Fold-Safe In-Pipeline Scaling
+            """
+        )
 
-    with col_input:
-        st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:12px;'>🎛️ Regional Factor Inputs (FR-21)</h3>", unsafe_allow_html=True)
-        st.caption("Adjust the sliders below to simulate environmental, meteorological, and infrastructure conditions (Scale: 0 - 15).")
+    # Main Grid: Inputs (Left) and Live Assessment (Right)
+    col_inputs, col_pred = st.columns([1.15, 1.0], gap="large")
+
+    with col_inputs:
+        st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:12px;'>🎛️ Regional Factor Inputs</h3>", unsafe_allow_html=True)
+        st.caption("Adjust factor values (Scale: 0.0 - 15.0) to simulate environmental and infrastructure conditions.")
 
         tab1, tab2, tab3 = st.tabs([
-            "🌧️ Meteorology & Watershed",
-            "🏗️ Infrastructure & Defense",
-            "🌱 Land Use & Urban Pressures",
+            "🌧️ Meteorology & Catchment",
+            "🏗️ Infrastructure & Defenses",
+            "🌱 Land Use & Pressures",
         ])
 
         tab_grouping = {
@@ -330,41 +330,21 @@ def main():
                     user_inputs[key] = val
                     st.session_state.input_state[key] = val
 
-    # Fill in any missing factor defaults
+    # Ensure all 20 raw features present
     for k in ALL_INPUT_FACTORS:
         if k not in user_inputs:
             user_inputs[k] = float(st.session_state.input_state.get(k, 5.0))
 
-    # Real-Time Inference Execution
+    # Real-Time Inference Execution via Pipeline Parity
     with col_pred:
         st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:12px;'>📊 Live Risk Assessment</h3>", unsafe_allow_html=True)
 
         t_start = time.time()
-        enriched = compute_derived_indicators(user_inputs)
-        input_row = pd.DataFrame([enriched])
-
-        # Guarantee all 12 selected features in exact model order
-        for feat in selected_features:
-            if feat not in input_row.columns:
-                input_row[feat] = 5.0
-        input_row = input_row[selected_features]
-
-        # Scaler transformation (safeguards against data leakage)
-        scaled_array = scaler.transform(input_row)
-        scaled_input = pd.DataFrame(scaled_array, columns=selected_features)
-
-        # Predict risk class & probabilities
-        pred_raw = model.predict(scaled_input)[0]
-        if target_encoder is not None:
-            pred_class = target_encoder.inverse_transform([pred_raw])[0]
-            class_order = list(target_encoder.classes_)
-        else:
-            map_cls = {0: "Low", 1: "Medium", 2: "High"}
-            pred_class = map_cls.get(pred_raw, str(pred_raw))
-            class_order = ["Low", "Medium", "High"]
-
-        probabilities = model.predict_proba(scaled_input)[0]
+        pred_class, confidence, prob_dict, decision = predict_single_instance(user_inputs, pipeline=pipeline)
         inference_latency_ms = (time.time() - t_start) * 1000.0
+
+        # Centralized Domain Feature Calculations (from src.features)
+        domain_feats = compute_domain_features_dict(user_inputs)
 
         # Style Banner by Risk Level
         risk_configs = {
@@ -372,32 +352,30 @@ def main():
                 "class_name": "risk-banner-high",
                 "emoji": "🔴",
                 "color": "#EF4444",
-                "tag": "CRITICAL RISK",
-                "summary": "Severe regional flood hazard detected. Impending breach of hydrological thresholds.",
-                "action": "Trigger emergency flood alarms, open auxiliary spillways, and initiate evacuation protocols for low-lying zones."
+                "tag": "HIGH RISK SIMULATION",
+                "summary": "Simulated multi-factor conditions indicate critical vulnerability under hypothetical stress.",
+                "note": "For academic simulation analysis only. Not an authorized emergency directive."
             },
             "Medium": {
                 "class_name": "risk-banner-medium",
                 "emoji": "🟡",
                 "color": "#F59E0B",
-                "tag": "MODERATE RISK",
-                "summary": "Elevated water volume approaching bankfull stage with localized drainage bottlenecks.",
-                "action": "Place disaster management rapid-response units on standby. Clear culverts and monitor upstream rainfall gauges."
+                "tag": "MODERATE RISK SIMULATION",
+                "summary": "Simulated conditions exhibit elevated parameter pressures approaching thresholds.",
+                "note": "Elevated parameter scores reflect heightened simulated sensitivity."
             },
             "Low": {
                 "class_name": "risk-banner-low",
                 "emoji": "🟢",
                 "color": "#10B981",
-                "tag": "NOMINAL RISK",
-                "summary": "Hydrological parameters within normal seasonal containment capacities.",
-                "action": "Maintain routine catchment monitoring. Carry out standard seasonal levee and canal maintenance."
+                "tag": "NOMINAL RISK SIMULATION",
+                "summary": "Simulated parameters fall within standard baseline containment bounds.",
+                "note": "Parameters reflect typical seasonal stability."
             },
         }
         cfg = risk_configs.get(pred_class, risk_configs["Medium"])
-        prob_dict = {cls: prob for cls, prob in zip(class_order, probabilities)}
-        curr_confidence = prob_dict.get(pred_class, 0.0) * 100.0
 
-        # Render Main Risk Banner (FR-22)
+        # Render Risk Banner
         st.markdown(
             f"""
             <div class="{cfg['class_name']}">
@@ -406,7 +384,7 @@ def main():
                         {cfg['tag']}
                     </span>
                     <span style="color: #E2E8F0; font-size: 0.85rem; font-family: 'JetBrains Mono', monospace;">
-                        ⚡ Inference: {inference_latency_ms:.1f}ms
+                        ⚡ Latency: {inference_latency_ms:.1f}ms
                     </span>
                 </div>
                 <div style="display: flex; align-items: baseline; gap: 12px;">
@@ -414,15 +392,14 @@ def main():
                         {cfg['emoji']} {pred_class.upper()} RISK
                     </h2>
                     <span style="font-size: 1.4rem; font-weight: 700; color: {cfg['color']}; font-family: 'JetBrains Mono', monospace;">
-                        {curr_confidence:.1f}%
+                        {confidence:.1f}%
                     </span>
                 </div>
-                <p style="margin: 10px 0 0 0; color: #F1F5F9; font-size: 0.98rem; line-height: 1.45;">
+                <p style="margin: 10px 0 0 0; color: #F1F5F9; font-size: 0.95rem; line-height: 1.45;">
                     {cfg['summary']}
                 </p>
-                <div style="margin-top: 14px; padding: 12px 16px; background: rgba(0, 0, 0, 0.25); border-radius: 10px; border-left: 3px solid {cfg['color']};">
-                    <b style="color: #F8FAFC; font-size: 0.85rem; text-transform: uppercase;">Recommended Response Protocol:</b>
-                    <div style="color: #CBD5E1; font-size: 0.9rem; margin-top: 4px;">{cfg['action']}</div>
+                <div style="margin-top: 14px; padding: 10px 14px; background: rgba(0, 0, 0, 0.25); border-radius: 8px; border-left: 3px solid {cfg['color']};">
+                    <span style="color: #CBD5E1; font-size: 0.85rem;">ℹ️ {cfg['note']}</span>
                 </div>
             </div>
             """,
@@ -431,9 +408,8 @@ def main():
 
         st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
 
-        # Confidence Progress Bars per Class (FR-23)
-        st.markdown("<h4 style='color:#E2E8F0; font-weight:700; margin-bottom:12px;'>🎯 Class Confidence Probabilities (FR-23)</h4>", unsafe_allow_html=True)
-
+        # Calibrated Probability Breakdown
+        st.markdown("<h4 style='color:#E2E8F0; font-weight:700; margin-bottom:12px;'>🎯 Calibrated Probabilities</h4>", unsafe_allow_html=True)
         bar_colors = {"Low": "#10B981", "Medium": "#F59E0B", "High": "#EF4444"}
         for cls in ["High", "Medium", "Low"]:
             prob_val = prob_dict.get(cls, 0.0)
@@ -452,15 +428,15 @@ def main():
                 unsafe_allow_html=True,
             )
 
-        # Composite Indicator Metrics Card
-        st.markdown("<h4 style='color:#E2E8F0; font-weight:700; margin: 18px 0 10px 0;'>🧪 Engineered Composite Indices (FR-08)</h4>", unsafe_allow_html=True)
+        # Domain Sub-Indices (Zero Global Row Aggregators)
+        st.markdown("<h4 style='color:#E2E8F0; font-weight:700; margin: 18px 0 10px 0;'>🧪 Sub-Domain Risk Indices</h4>", unsafe_allow_html=True)
         m_col1, m_col2, m_col3 = st.columns(3)
         with m_col1:
             st.markdown(
                 f"""
                 <div class="glass-card" style="text-align:center;">
-                    <div class="metric-val" style="color: #38BDF8;">{enriched['Flood_Vulnerability_Score']:.2f}</div>
-                    <div class="metric-lbl">Vulnerability Score</div>
+                    <div class="metric-val" style="color: #38BDF8;">{domain_feats.get('Environmental_Risk', 5.0):.2f}</div>
+                    <div class="metric-lbl">Environmental</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -469,8 +445,8 @@ def main():
             st.markdown(
                 f"""
                 <div class="glass-card" style="text-align:center;">
-                    <div class="metric-val" style="color: #F59E0B;">{enriched['Infrastructure_Deficit_Score']:.2f}</div>
-                    <div class="metric-lbl">Infrastructure Deficit</div>
+                    <div class="metric-val" style="color: #F59E0B;">{domain_feats.get('Infrastructure_Vulnerability', 5.0):.2f}</div>
+                    <div class="metric-lbl">Infrastructure</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -479,8 +455,8 @@ def main():
             st.markdown(
                 f"""
                 <div class="glass-card" style="text-align:center;">
-                    <div class="metric-val" style="color: #A855F7;">{enriched['Aggregate_Hazard_Index']:.2f}</div>
-                    <div class="metric-lbl">Hazard Index</div>
+                    <div class="metric-val" style="color: #A855F7;">{domain_feats.get('Anthropogenic_Pressure', 5.0):.2f}</div>
+                    <div class="metric-lbl">Anthropogenic</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -488,44 +464,41 @@ def main():
 
     st.markdown("---")
 
-    # Bottom Section: Feature Importance (FR-24) & Multi-Model Benchmark Comparison
-    st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:16px;'>📈 Model Intelligence & Benchmarking</h3>", unsafe_allow_html=True)
-    bench_col1, bench_col2 = st.columns([1.1, 1.0], gap="large")
+    # Bottom Section: Model Benchmarks & Integrity
+    st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:16px;'>📈 Pipeline Benchmarking & Validation</h3>", unsafe_allow_html=True)
+    bench_col1, bench_col2 = st.columns([1.0, 1.0], gap="large")
 
     with bench_col1:
-        st.markdown("<h4 style='color:#E2E8F0; font-weight:700;'>🏆 Top Predictive Feature Importances (FR-24)</h4>", unsafe_allow_html=True)
-        st.caption("Gini relative importance for the top selected predictors in the best ensemble model.")
-
-        if hasattr(model, "feature_importances_"):
-            importances = model.feature_importances_
-            feat_df = pd.DataFrame({
-                "Feature": selected_features,
-                "Importance": importances
-            }).sort_values(by="Importance", ascending=True)
-
-            st.bar_chart(feat_df.set_index("Feature"), color="#38BDF8", use_container_width=True)
-        else:
-            st.info("Feature importances not directly exposed for this model type.")
-
-    with bench_col2:
-        st.markdown("<h4 style='color:#E2E8F0; font-weight:700;'>📋 6-Model Benchmark Comparison (FR-20)</h4>", unsafe_allow_html=True)
-        st.caption("Sorted strictly by F1-Weighted score on 3,000 held-out test samples.")
+        st.markdown("<h4 style='color:#E2E8F0; font-weight:700;'>📋 Held-out Test Partition Metrics</h4>", unsafe_allow_html=True)
+        st.caption("Benchmark evaluated strictly on 10,000 held-out samples without test leakage.")
 
         if comparison_df is not None:
-            # Format dataframe for display
             styled_df = comparison_df.copy()
             styled_df["Accuracy"] = (styled_df["Accuracy"] * 100).map("{:.2f}%".format)
             styled_df["F1_Weighted"] = styled_df["F1_Weighted"].map("{:.4f}".format)
             styled_df["ROC_AUC"] = styled_df["ROC_AUC"].map("{:.4f}".format)
-            styled_df["CV_Mean"] = styled_df["CV_Mean"].map("{:.4f}".format)
+            styled_df["Brier_Score"] = styled_df["Brier_Score"].map("{:.4f}".format)
 
             st.dataframe(
-                styled_df[["Model", "F1_Weighted", "Accuracy", "ROC_AUC", "CV_Mean"]],
+                styled_df[["Model", "Accuracy", "F1_Weighted", "ROC_AUC", "Brier_Score"]],
                 hide_index=True,
                 use_container_width=True,
             )
         else:
             st.warning("Model comparison data not found. Run evaluate.py to generate benchmarks.")
+
+    with bench_col2:
+        st.markdown("<h4 style='color:#E2E8F0; font-weight:700;'>🛡️ Integrity & Calibration Verification</h4>", unsafe_allow_html=True)
+        st.caption("Verification guarantees enforcing production reliability.")
+
+        st.markdown(
+            """
+            - **Zero Target Proxy Leakage**: No row-wise global aggregations ($|r| < 0.85$).
+            - **Fold-Safe Pipeline**: Preprocessing & scaling fit strictly within training folds.
+            - **Calibrated Probabilities**: Sigmoid/isotonic calibration prevents overconfidence.
+            - **Cryptographic Guardrails**: SHA-256 verified deserialization blocks untrusted pickles.
+            """
+        )
 
 
 if __name__ == "__main__":

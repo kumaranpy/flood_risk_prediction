@@ -1,178 +1,204 @@
-import csv
+"""
+Preprocessing & Data Splitting Module for Flood Risk Prediction.
+
+Architectural Guarantees:
+  1. Preserves raw feature space in data/splits/train.csv and test.csv (no global scaling).
+  2. Implements scikit-learn compatible OutlierCapper for fold-safe capping inside Pipelines.
+  3. Discretizes FloodProbability into balanced tertiles based ONLY on training split distributions.
+  4. Saves empirical target cutoffs to models/target_bins.json.
+  5. Performs deterministic 80/20 stratified train/test split.
+"""
+
 import json
 from pathlib import Path
-import joblib
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.model_selection import train_test_split
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "flood_factors.csv"
-PROCESSED_DATA_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned.csv"
+SPLITS_DIR = PROJECT_ROOT / "data" / "splits"
 MODELS_DIR = PROJECT_ROOT / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-PROCESSED_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-SCALER_PATH = MODELS_DIR / "scaler.pkl"
-ENCODERS_PATH = MODELS_DIR / "encoders.pkl"
-TARGET_ENCODER_PATH = MODELS_DIR / "target_encoder.pkl"
+TRAIN_SPLIT_PATH = SPLITS_DIR / "train.csv"
+TEST_SPLIT_PATH = SPLITS_DIR / "test.csv"
+TARGET_BINS_PATH = MODELS_DIR / "target_bins.json"
 
 
-def detect_file_properties(file_path: Path):
+class OutlierCapper(BaseEstimator, TransformerMixin):
     """
-    FR-01: Auto-detect dataset delimiter and file encoding.
-    Attempts standard encodings and uses csv.Sniffer for delimiter detection.
+    Scikit-learn compatible outlier capper.
+    Computes lower/upper bounds strictly on training data during .fit()
+    and clips input features during .transform().
+    
+    Uses 1st/99th percentiles for robust clipping that prevents
+    out-of-distribution inputs at inference time.
     """
-    candidate_encodings = ["utf-8", "utf-8-sig", "cp1252", "latin-1"]
-    detected_encoding = "utf-8"
-    detected_delimiter = ","
 
-    for enc in candidate_encodings:
-        try:
-            with open(file_path, "r", encoding=enc) as f:
-                sample = f.read(8192)
-                detected_encoding = enc
-                try:
-                    sniffer = csv.Sniffer()
-                    dialect = sniffer.sniff(sample, delimiters=[",", ";", "\t", "|"])
-                    detected_delimiter = dialect.delimiter
-                except Exception:
-                    # Fallback to comma if sniffing dialect fails
-                    detected_delimiter = ","
-                break
-        except (UnicodeDecodeError, UnicodeError):
-            continue
+    def __init__(self, lower_percentile: float = 1.0, upper_percentile: float = 99.0):
+        self.lower_percentile = lower_percentile
+        self.upper_percentile = upper_percentile
+        self.lower_bounds_: Dict[str, float] = {}
+        self.upper_bounds_: Dict[str, float] = {}
+        self.feature_names_in_: Optional[List[str]] = None
 
-    return detected_delimiter, detected_encoding
+    def fit(self, X: Union[pd.DataFrame, np.ndarray], y=None):
+        if isinstance(X, pd.DataFrame):
+            self.feature_names_in_ = list(X.columns)
+            self.lower_bounds_ = {}
+            self.upper_bounds_ = {}
+            for col in X.columns:
+                self.lower_bounds_[col] = float(X[col].quantile(self.lower_percentile / 100.0))
+                self.upper_bounds_[col] = float(X[col].quantile(self.upper_percentile / 100.0))
+        else:
+            X_arr = np.asarray(X)
+            self.lower_bounds_ = {f"col_{i}": float(np.percentile(X_arr[:, i], self.lower_percentile)) for i in range(X_arr.shape[1])}
+            self.upper_bounds_ = {f"col_{i}": float(np.percentile(X_arr[:, i], self.upper_percentile)) for i in range(X_arr.shape[1])}
+            self.feature_names_in_ = [f"col_{i}" for i in range(X_arr.shape[1])]
+        return self
+
+    def transform(self, X: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
+        if isinstance(X, pd.DataFrame):
+            X_out = X.copy()
+            for col in X_out.columns:
+                if col in self.lower_bounds_:
+                    X_out[col] = X_out[col].clip(self.lower_bounds_[col], self.upper_bounds_[col])
+            return X_out
+        elif isinstance(X, dict):
+            X_out = pd.DataFrame([X])
+            for col in X_out.columns:
+                if col in self.lower_bounds_:
+                    X_out[col] = X_out[col].clip(self.lower_bounds_[col], self.upper_bounds_[col])
+            return X_out
+        else:
+            X_arr = np.asarray(X, dtype=float).copy()
+            for i, key in enumerate(self.lower_bounds_.keys()):
+                if i < X_arr.shape[1]:
+                    X_arr[:, i] = np.clip(X_arr[:, i], self.lower_bounds_[key], self.upper_bounds_[key])
+            return pd.DataFrame(X_arr, columns=self.feature_names_in_)
+
+    def get_feature_names_out(self, input_features=None):
+        return np.array(self.feature_names_in_, dtype=object) if self.feature_names_in_ else None
 
 
-def auto_detect_target(df: pd.DataFrame) -> str:
-    """Auto-detect target column: last column or column matching target keywords."""
-    target_keywords = ["risk", "flood", "label", "target", "probability", "class"]
-    for col in df.columns:
-        if any(kw in col.lower() for kw in target_keywords):
-            return col
-    return df.columns[-1]
-
-
-def discretize_target(y_series: pd.Series) -> pd.Series:
+def compute_target_bins(y_train_continuous: pd.Series) -> Dict[str, float]:
     """
-    Converts target into discrete risk classes: Low, Medium, High.
-    If continuous (float), bins into balanced tertiles:
-      - Low: <= 0.475 (~33rd percentile)
-      - Medium: 0.475 to 0.520
-      - High: > 0.520 (~67th percentile)
-    If already categorical/string, normalizes casing.
+    Computes tertile boundaries strictly on the training set's empirical distribution.
+    Returns:
+      dict with 'p33' and 'p67' cutoffs.
     """
-    if np.issubdtype(y_series.dtype, np.floating) or np.issubdtype(y_series.dtype, np.integer):
-        if y_series.nunique() > 10:
-            bins = [-float("inf"), 0.475, 0.520, float("inf")]
-            labels = ["Low", "Medium", "High"]
-            discretized = pd.cut(y_series, bins=bins, labels=labels)
-            return discretized.astype(str)
-    return y_series.astype(str)
+    p33 = float(np.percentile(y_train_continuous, 33.333))
+    p67 = float(np.percentile(y_train_continuous, 66.667))
+    return {
+        "p33": round(p33, 4),
+        "p67": round(p67, 4),
+        "low_max": round(p33, 4),
+        "med_max": round(p67, 4),
+        "classes": ["Low", "Medium", "High"],
+    }
 
 
-def run_preprocessing():
+def discretize_with_bins(y_continuous: pd.Series, bin_config: Dict[str, float]) -> pd.Series:
     """
-    End-to-end Phase 1 preprocessing function meeting requirements FR-01 through FR-06.
+    Discretizes continuous flood probability into tertiles using provided boundaries.
+    """
+    p33 = bin_config["p33"]
+    p67 = bin_config["p67"]
+    bins = [-float("inf"), p33, p67, float("inf")]
+    labels = ["Low", "Medium", "High"]
+    return pd.cut(y_continuous, bins=bins, labels=labels).astype(str)
+
+
+def run_data_preparation() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Executes raw data validation, train/test splitting, and target discretization.
+    Saves:
+      - data/splits/train.csv
+      - data/splits/test.csv
+      - models/target_bins.json
     """
     print("=" * 60)
-    print("PHASE 1: PREPROCESSING STARTED")
+    print("PHASE 1: DATA PREPARATION & FOLD-SAFE SPLITTING")
     print("=" * 60)
 
-    # FR-01: Auto-detect delimiter and encoding
-    delimiter, encoding = detect_file_properties(RAW_DATA_PATH)
-    print(f"FR-01: Detected Delimiter: '{delimiter}' | Encoding: '{encoding}'")
-    print(f"Loading data from: {RAW_DATA_PATH}")
-    df = pd.read_csv(RAW_DATA_PATH, delimiter=delimiter, encoding=encoding)
+    SPLITS_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("\n--- INITIAL DATA INFO ---")
-    print(f"Shape: {df.shape}")
-    print(f"Null counts total: {df.isnull().sum().sum()}")
-    print(f"Duplicate rows: {df.duplicated().sum()}")
+    print(f"Loading raw dataset from: {RAW_DATA_PATH}")
+    df_raw = pd.read_csv(RAW_DATA_PATH)
+    print(f"Raw shape: {df_raw.shape}")
 
-    target_col = auto_detect_target(df)
-    print(f"\nAuto-detected target column: '{target_col}'")
+    target_col = "FloodProbability"
+    if target_col not in df_raw.columns:
+        # Fallback to last column
+        target_col = df_raw.columns[-1]
 
-    feature_cols = [c for c in df.columns if c != target_col]
-    X = df[feature_cols].copy()
-    raw_y = df[target_col].copy()
+    X_raw = df_raw.drop(columns=[target_col]).copy()
+    y_raw = df_raw[target_col].copy()
 
-    # Discretize continuous target to Low, Medium, High
-    y_discrete = discretize_target(raw_y)
-    target_encoder = LabelEncoder()
-    # Explicitly fit with standard ordering: Low=0, Medium=1, High=2
-    target_encoder.fit(["Low", "Medium", "High"])
-    print(f"Target classes: {target_encoder.classes_}")
-    print(f"Target class distribution:\n{y_discrete.value_counts(normalize=True)}")
+    # Verify no unexpected NaN or infinite values in raw data
+    if X_raw.isnull().any().any() or np.isinf(X_raw.select_dtypes(include=[np.number])).any().any():
+        print("Warning: Missing or infinite values found in raw data. Will impute per-fold after split.")
 
-    joblib.dump(target_encoder, TARGET_ENCODER_PATH)
+    # Step 1: Deterministic 80/20 train/test split ON RAW DATA
+    # To stratify continuous target, create temporary decile bins for splitting
+    temp_strat_bins = pd.qcut(y_raw, q=10, labels=False, duplicates="drop")
+    X_train, X_test, y_train_cont, y_test_cont = train_test_split(
+        X_raw,
+        y_raw,
+        test_size=0.20,
+        random_state=42,
+        stratify=temp_strat_bins,
+    )
 
-    # FR-02: Handling missing values (median for numeric, mode for categorical)
-    print("\n--- HANDLING MISSING VALUES (FR-02) ---")
-    numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
+    print(f"Train split size: {X_train.shape[0]} samples")
+    print(f"Test split size:  {X_test.shape[0]} samples")
 
-    for col in numeric_cols:
-        if X[col].isnull().any():
-            median_val = X[col].median()
-            X[col] = X[col].fillna(median_val)
-            print(f"  Imputed {col} missing with median: {median_val:.4f}")
+    # Step 1b: Compute imputation statistics STRICTLY ON TRAINING SET and apply to both
+    numeric_cols = X_train.select_dtypes(include=[np.number]).columns
+    train_medians = X_train[numeric_cols].median()
+    X_train = X_train.fillna(train_medians)
+    X_test = X_test.fillna(train_medians)
 
-    for col in categorical_cols:
-        if X[col].isnull().any():
-            mode_val = X[col].mode()[0] if not X[col].mode().empty else "unknown"
-            X[col] = X[col].fillna(mode_val)
-            print(f"  Imputed {col} missing with mode: {mode_val}")
+    # Step 2: Compute tertile boundaries STRICTLY ON TRAINING SET
+    target_bins = compute_target_bins(y_train_cont)
+    print(f"Computed training empirical target bins: {target_bins}")
 
-    # FR-03: Capping outliers using IQR 1.5x rule
-    print("\n--- CAPPING OUTLIERS (IQR 1.5x) (FR-03) ---")
-    capped_count = 0
-    for col in numeric_cols:
-        q1 = X[col].quantile(0.25)
-        q3 = X[col].quantile(0.75)
-        iqr = q3 - q1
-        lower = q1 - 1.5 * iqr
-        upper = q3 + 1.5 * iqr
-        outliers = ((X[col] < lower) | (X[col] > upper)).sum()
-        if outliers > 0:
-            X[col] = X[col].clip(lower, upper)
-            capped_count += outliers
-            print(f"  {col}: capped {outliers} outliers to [{lower:.2f}, {upper:.2f}]")
-    if capped_count == 0:
-        print("  No extreme outliers beyond 1.5x IQR.")
+    with open(TARGET_BINS_PATH, "w", encoding="utf-8") as f:
+        json.dump(target_bins, f, indent=2)
+    print(f"Saved target bins metadata to: {TARGET_BINS_PATH}")
 
-    # FR-04: Auto-encode categorical columns
-    print("\n--- ENCODING CATEGORICAL COLUMNS (FR-04) ---")
-    encoders = {}
-    for col in categorical_cols:
-        le = LabelEncoder()
-        X[col] = le.fit_transform(X[col].astype(str))
-        encoders[col] = le
-        print(f"  Encoded {col} ({len(le.classes_)} classes)")
-    joblib.dump(encoders, ENCODERS_PATH)
+    # Step 3: Discretize training and test targets using the TRAINING boundaries
+    y_train_discrete = discretize_with_bins(y_train_cont, target_bins)
+    y_test_discrete = discretize_with_bins(y_test_cont, target_bins)
 
-    # FR-05: Apply StandardScaler to numeric features
-    print("\n--- SCALING NUMERIC FEATURES (FR-05) ---")
-    scaler = StandardScaler()
-    X[numeric_cols] = scaler.fit_transform(X[numeric_cols])
-    joblib.dump(scaler, SCALER_PATH)
-    print(f"  Saved fitted scaler to: {SCALER_PATH}")
+    print("\nTraining class balance:")
+    print(y_train_discrete.value_counts(normalize=True))
 
-    # FR-06: Save cleaned data
-    cleaned_df = X.copy()
-    cleaned_df[target_col] = y_discrete.values
-    cleaned_df.to_csv(PROCESSED_DATA_PATH, index=False)
-    print(f"\nFR-06: Saved cleaned dataset to: {PROCESSED_DATA_PATH}")
-    print(f"Cleaned shape: {cleaned_df.shape}")
+    print("\nTest class balance:")
+    print(y_test_discrete.value_counts(normalize=True))
 
+    # Step 4: Persist train and test sets in RAW unscaled feature space
+    train_df = X_train.copy()
+    train_df["FloodProbability_raw"] = y_train_cont.values
+    train_df["RiskLevel"] = y_train_discrete.values
+
+    test_df = X_test.copy()
+    test_df["FloodProbability_raw"] = y_test_cont.values
+    test_df["RiskLevel"] = y_test_discrete.values
+
+    train_df.to_csv(TRAIN_SPLIT_PATH, index=False)
+    test_df.to_csv(TEST_SPLIT_PATH, index=False)
+
+    print(f"\nPersisted raw training partition to: {TRAIN_SPLIT_PATH}")
+    print(f"Persisted raw test partition to:     {TEST_SPLIT_PATH}")
     print("=" * 60)
-    print("PHASE 1: PREPROCESSING COMPLETED")
+    print("PHASE 1 COMPLETED SUCCESSFULLY (No Global Scaling or Pre-Split Leakage)")
     print("=" * 60)
 
-    return cleaned_df, target_col
+    return train_df, test_df
 
 
 if __name__ == "__main__":
-    run_preprocessing()
+    run_data_preparation()

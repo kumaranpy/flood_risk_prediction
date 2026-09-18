@@ -1,3 +1,14 @@
+"""
+End-to-End Pipeline Orchestrator for Flood Risk Prediction.
+
+Executes all pipeline phases in sequence:
+  Phase 1: Preprocessing, Empirical Target Binning, & Deterministic Splitting
+  Phase 2: Exploratory Data Analysis & Visualizations
+  Phase 3: Fold-Safe Pipeline Training, Tuning, & Probability Calibration
+  Phase 4: Strict Held-out Test Split Evaluation & Report Generation
+  Phase 5: Single-Instance Verified Inference Demonstration
+"""
+
 import sys
 import time
 from pathlib import Path
@@ -10,53 +21,47 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-SRC_DIR = PROJECT_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from preprocess import run_preprocessing
-from features import run_feature_engineering
-from eda import run_eda
-from train import run_training
-from evaluate import run_evaluation
-from predict import run_prediction
+from src.preprocess import run_data_preparation
+from src.eda import run_eda
+from src.train import run_training
+from src.evaluate import run_evaluation
+from src.predict import run_prediction
 
 
 def main():
     start_time = time.time()
     print("=" * 70)
-    print("=== END-TO-END FLOOD RISK PREDICTION PIPELINE ===")
+    print("=== REFACTORED PRODUCTION FLOOD RISK PREDICTION PIPELINE ===")
     print("=" * 70)
 
     try:
         p1_start = time.time()
-        print("\n🚀 [Phase 1/6]: Data Cleaning & Preprocessing (FR-01 - FR-06)")
-        run_preprocessing()
+        print("\n🚀 [Phase 1/5]: Data Preparation & Fold-Safe Splitting")
+        run_data_preparation()
         print(f"⏱ Phase 1 completed in {time.time() - p1_start:.2f}s")
 
         p2_start = time.time()
-        print("\n🚀 [Phase 2/6]: Feature Engineering & Selection (FR-07 - FR-10)")
-        run_feature_engineering()
+        print("\n🚀 [Phase 2/5]: Exploratory Data Analysis & Plots")
+        run_eda()
         print(f"⏱ Phase 2 completed in {time.time() - p2_start:.2f}s")
 
         p3_start = time.time()
-        print("\n🚀 [Phase 3/6]: Exploratory Data Analysis & Plots")
-        run_eda()
+        print("\n🚀 [Phase 3/5]: Fold-Safe Pipeline Training & Calibration")
+        run_training()
         print(f"⏱ Phase 3 completed in {time.time() - p3_start:.2f}s")
 
         p4_start = time.time()
-        print("\n🚀 [Phase 4/6]: Model Training & Tuning (FR-11 - FR-16)")
-        run_training()
+        print("\n🚀 [Phase 4/5]: Evaluation on Untouched Held-out Test Split")
+        run_evaluation()
         print(f"⏱ Phase 4 completed in {time.time() - p4_start:.2f}s")
 
         p5_start = time.time()
-        print("\n🚀 [Phase 5/6]: Model Evaluation & Reporting (FR-17 - FR-20)")
-        run_evaluation()
-        print(f"⏱ Phase 5 completed in {time.time() - p5_start:.2f}s")
-
-        p6_start = time.time()
-        print("\n🚀 [Phase 6/6]: Single-Instance Inference Demonstration")
+        print("\n🚀 [Phase 5/5]: Single-Instance Verified Inference Demonstration")
         run_prediction()
-        print(f"⏱ Phase 6 completed in {time.time() - p6_start:.2f}s")
+        print(f"⏱ Phase 5 completed in {time.time() - p5_start:.2f}s")
 
         total_elapsed = time.time() - start_time
         print("\n" + "=" * 70)
@@ -64,12 +69,13 @@ def main():
         print("=" * 70)
         print("\n📊 Launch the Interactive Web Dashboard:")
         print("   streamlit run app/dashboard.py")
-        print("\n📁 Key Project Artifacts:")
-        print("   - Trained Models : models/ (best_model.pkl, scaler.pkl, etc.)")
-        print("   - Evaluation Plots: outputs/plots/")
-        print("   - Comparison CSV : outputs/reports/model_comparison.csv")
-        print("   - Final Report   : outputs/reports/final_report.md")
-        print("   - Processed Data : data/processed/")
+        print("\n📁 Key Production Artifacts:")
+        print("   - Calibrated Pipeline : models/best_pipeline.pkl")
+        print("   - Checksums Registry  : models/checksums.json")
+        print("   - Empirical Bins      : models/target_bins.json")
+        print("   - Raw Split Data      : data/splits/ (train.csv, test.csv)")
+        print("   - Evaluation Reports  : outputs/reports/ (model_comparison.csv, final_report.md)")
+        print("   - Evaluation Plots    : outputs/plots/")
 
     except Exception as e:
         print(f"\n❌ PIPELINE EXECUTION FAILED: {e}")

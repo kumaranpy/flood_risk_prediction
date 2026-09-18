@@ -1,152 +1,214 @@
+"""
+Feature Engineering Module for Flood Risk Prediction.
+
+This module provides:
+  1. DomainFeatureAdder: A scikit-learn compatible transformer that constructs
+     domain-specific sub-index features (meteorological, infrastructure, environmental).
+     CRITICAL: No global row-wise means or sums across all predictors are permitted (F-01).
+  2. Helper utilities for single-instance dictionary feature expansion during real-time inference.
+  3. Feature correlation verification to guarantee no feature exceeds |r| >= 0.85 with the target.
+"""
+
 from pathlib import Path
-import joblib
+from typing import Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
-from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.base import BaseEstimator, TransformerMixin
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CLEANED_DATA_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned.csv"
-FEATURES_DATA_PATH = PROJECT_ROOT / "data" / "processed" / "features.csv"
-MODELS_DIR = PROJECT_ROOT / "models"
-SELECTED_FEATURES_PATH = MODELS_DIR / "selected_features.pkl"
-FEATURE_SELECTOR_PATH = MODELS_DIR / "feature_selector.pkl"
+
+# Domain-specific feature definitions: each feature uses ONLY a restricted subset of factors
+DOMAIN_FEATURE_DEFINITIONS = {
+    "Environmental_Risk": ["MonsoonIntensity", "Landslides", "DeterioratingInfrastructure"],
+    "Infrastructure_Vulnerability": ["Siltation", "DrainageSystems"],
+    "Anthropogenic_Pressure": ["Urbanization", "Deforestation", "Encroachments", "WetlandLoss"],
+    "Hydrometeorological_Risk": ["MonsoonIntensity", "ClimateChange", "CoastalVulnerability"],
+}
+
+# Key interaction features for flood prediction (domain-driven)
+INTERACTION_FEATURES = [
+    ("MonsoonIntensity", "Urbanization"),
+    ("Deforestation", "RiverManagement"),
+    ("ClimateChange", "DamsQuality"),
+    ("Siltation", "AgriculturalPractices"),
+    ("TopographyDrainage", "MonsoonIntensity"),
+]
 
 
-def auto_detect_target(df: pd.DataFrame) -> str:
-    """Auto-detect target column from dataframe."""
-    target_keywords = ["risk", "flood", "label", "target", "probability", "class"]
-    for col in df.columns:
-        if any(kw in col.lower() for kw in target_keywords):
-            return col
-    return df.columns[-1]
-
-
-def compute_flood_vulnerability_score(df: pd.DataFrame) -> pd.Series:
+def compute_domain_features_dict(input_dict: Dict[str, Union[int, float]]) -> Dict[str, Union[int, float]]:
     """
-    FR-08: Compute composite Flood Vulnerability Score using domain-specified weights:
-      - MonsoonIntensity: 0.35
-      - TopographyDrainage: 0.25
-      - RiverManagement: 0.20
-      - Deforestation: 0.20
+    Computes domain-specific sub-index features for a single input dictionary.
+    Used for real-time inference to ensure parity with batch transformations.
+    Does NOT compute any global row-wise sums or averages.
     """
-    weights = {
-        "MonsoonIntensity": 0.35,
-        "TopographyDrainage": 0.25,
-        "RiverManagement": 0.20,
-        "Deforestation": 0.20,
-    }
-    available_weights = {k: v for k, v in weights.items() if k in df.columns}
-    if not available_weights:
-        return pd.Series(0.0, index=df.index)
+    output = dict(input_dict)
 
-    total_weight = sum(available_weights.values())
-    normalized_weights = {k: v / total_weight for k, v in available_weights.items()}
-    score = sum(df[col] * w for col, w in normalized_weights.items())
-    return score
+    # Environmental Risk
+    env_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Environmental_Risk"] if c in input_dict]
+    if env_cols:
+        output["Environmental_Risk"] = float(np.mean([input_dict[c] for c in env_cols]))
+
+    # Infrastructure Vulnerability
+    infra_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Infrastructure_Vulnerability"] if c in input_dict]
+    if infra_cols:
+        output["Infrastructure_Vulnerability"] = float(np.mean([input_dict[c] for c in infra_cols]))
+
+    # Anthropogenic Pressure
+    anthro_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Anthropogenic_Pressure"] if c in input_dict]
+    if anthro_cols:
+        output["Anthropogenic_Pressure"] = float(np.mean([input_dict[c] for c in anthro_cols]))
+
+    # Hydrometeorological Risk
+    hydro_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Hydrometeorological_Risk"] if c in input_dict]
+    if hydro_cols:
+        output["Hydrometeorological_Risk"] = float(np.mean([input_dict[c] for c in hydro_cols]))
+
+    # Domain-driven interaction features
+    for feat1, feat2 in INTERACTION_FEATURES:
+        if feat1 in input_dict and feat2 in input_dict:
+            output[f"{feat1}_x_{feat2}"] = float(input_dict[feat1] * input_dict[feat2])
+
+    # Ratio features (invariant to scale shifts) - key for distribution shift robustness
+    if "MonsoonIntensity" in input_dict and "TopographyDrainage" in input_dict:
+        output["Water_Stress"] = float(input_dict["MonsoonIntensity"] / (input_dict["TopographyDrainage"] + 1e-6))
+    
+    if "Urbanization" in input_dict and "DamsQuality" in input_dict:
+        output["Infra_Gap"] = float(input_dict["Urbanization"] / (input_dict["DamsQuality"] + 1e-6))
+    
+    if "Deforestation" in input_dict and "ClimateChange" in input_dict:
+        output["Eco_Damage"] = float(input_dict["Deforestation"] * input_dict["ClimateChange"])
+    
+    if "Siltation" in input_dict and "RiverManagement" in input_dict:
+        output["Siltation_Pressure"] = float(input_dict["Siltation"] / (input_dict["RiverManagement"] + 1e-6))
+    
+    if "IneffectiveDisasterPreparedness" in input_dict and "DrainageSystems" in input_dict:
+        output["Preparedness_Deficit"] = float(input_dict["IneffectiveDisasterPreparedness"] / (input_dict["DrainageSystems"] + 1e-6))
+
+    return output
 
 
-def engineer_domain_features(df: pd.DataFrame) -> pd.DataFrame:
+class DomainFeatureAdder(BaseEstimator, TransformerMixin):
     """
-    Computes Flood_Vulnerability_Score (FR-08) as well as infrastructure,
-    environmental, and hazard aggregate indices to capture multidimensional risk.
+    Scikit-learn compatible transformer that computes domain-specific sub-index features.
+    
+    Adheres strictly to F-01:
+      - Does NOT compute any global row-wise aggregations (e.g. Aggregate_Hazard_Index).
+      - Combines only logically bounded sub-domain predictors.
     """
-    df_feat = df.copy()
 
-    # FR-08: Primary Flood Vulnerability Score
-    df_feat["Flood_Vulnerability_Score"] = compute_flood_vulnerability_score(df_feat)
+    def __init__(self, include_all_subdomains: bool = True):
+        self.include_all_subdomains = include_all_subdomains
+        self.feature_names_in_: Optional[List[str]] = None
+        self.output_features_: Optional[List[str]] = None
 
-    # Domain indices
-    infra_cols = ["DamsQuality", "DrainageSystems", "DeterioratingInfrastructure", "IneffectiveDisasterPreparedness"]
-    avail_infra = [c for c in infra_cols if c in df_feat.columns]
-    if avail_infra:
-        df_feat["Infrastructure_Deficit_Score"] = df_feat[avail_infra].mean(axis=1)
+    def fit(self, X: Union[pd.DataFrame, np.ndarray], y=None):
+        if isinstance(X, pd.DataFrame):
+            self.feature_names_in_ = list(X.columns)
+        elif hasattr(X, "shape") and self.feature_names_in_ is None:
+            self.feature_names_in_ = [f"feature_{i}" for i in range(X.shape[1])]
+        return self
 
-    env_cols = ["Urbanization", "ClimateChange", "AgriculturalPractices", "Encroachments", "WetlandLoss"]
-    avail_env = [c for c in env_cols if c in df_feat.columns]
-    if avail_env:
-        df_feat["Environmental_Stress_Score"] = df_feat[avail_env].mean(axis=1)
+    def transform(self, X: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
+        """
+        Transforms input X into a DataFrame containing original columns plus domain features.
+        """
+        if isinstance(X, pd.DataFrame):
+            df = X.copy()
+        elif isinstance(X, dict):
+            df = pd.DataFrame([X])
+        elif isinstance(X, (np.ndarray, list)):
+            cols = self.feature_names_in_ if self.feature_names_in_ is not None else [f"feature_{i}" for i in range(np.asarray(X).shape[1])]
+            df = pd.DataFrame(X, columns=cols)
+        else:
+            raise TypeError(f"Unsupported input type for DomainFeatureAdder: {type(X)}")
 
-    # Aggregate hazard index over numeric input factors
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if numeric_cols:
-        df_feat["Aggregate_Hazard_Index"] = df[numeric_cols].mean(axis=1)
+        # Ensure no accidental global aggregator exists
+        if "Aggregate_Hazard_Index" in df.columns:
+            df = df.drop(columns=["Aggregate_Hazard_Index"])
 
-    return df_feat
+        # Compute domain-specific features
+        # 1. Environmental Risk
+        env_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Environmental_Risk"] if c in df.columns]
+        if env_cols:
+            df["Environmental_Risk"] = df[env_cols].mean(axis=1)
+
+        # 2. Infrastructure Vulnerability
+        infra_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Infrastructure_Vulnerability"] if c in df.columns]
+        if infra_cols:
+            df["Infrastructure_Vulnerability"] = df[infra_cols].mean(axis=1)
+
+        # 3. Anthropogenic Pressure
+        anthro_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Anthropogenic_Pressure"] if c in df.columns]
+        if anthro_cols:
+            df["Anthropogenic_Pressure"] = df[anthro_cols].mean(axis=1)
+
+        # 4. Hydrometeorological Risk
+        hydro_cols = [c for c in DOMAIN_FEATURE_DEFINITIONS["Hydrometeorological_Risk"] if c in df.columns]
+        if hydro_cols:
+            df["Hydrometeorological_Risk"] = df[hydro_cols].mean(axis=1)
+
+        # Domain-driven interaction features
+        for feat1, feat2 in INTERACTION_FEATURES:
+            if feat1 in df.columns and feat2 in df.columns:
+                df[f"{feat1}_x_{feat2}"] = df[feat1] * df[feat2]
+
+        # Ratio features (invariant to scale shifts) - key for distribution shift robustness
+        # water stress: rainfall intensity relative to drainage capacity
+        if "MonsoonIntensity" in df.columns and "TopographyDrainage" in df.columns:
+            df["Water_Stress"] = df["MonsoonIntensity"] / (df["TopographyDrainage"] + 1e-6)
+        
+        # infrastructure gap: urbanization relative to infrastructure quality
+        if "Urbanization" in df.columns and "DamsQuality" in df.columns:
+            df["Infra_Gap"] = df["Urbanization"] / (df["DamsQuality"] + 1e-6)
+        
+        # environmental degradation: deforestation * climate change impact
+        if "Deforestation" in df.columns and "ClimateChange" in df.columns:
+            df["Eco_Damage"] = df["Deforestation"] * df["ClimateChange"]
+        
+        # siltation pressure relative to river management
+        if "Siltation" in df.columns and "RiverManagement" in df.columns:
+            df["Siltation_Pressure"] = df["Siltation"] / (df["RiverManagement"] + 1e-6)
+        
+        # disaster preparedness deficit
+        if "IneffectiveDisasterPreparedness" in df.columns and "DrainageSystems" in df.columns:
+            df["Preparedness_Deficit"] = df["IneffectiveDisasterPreparedness"] / (df["DrainageSystems"] + 1e-6)
+
+        self.output_features_ = list(df.columns)
+        return df
+
+    def get_feature_names_out(self, input_features=None):
+        if self.output_features_ is not None:
+            return np.array(self.output_features_, dtype=object)
+        if input_features is not None:
+            names = list(input_features)
+            for k in DOMAIN_FEATURE_DEFINITIONS.keys():
+                names.append(k)
+            return np.array(names, dtype=object)
+        return np.array(self.feature_names_in_, dtype=object) if self.feature_names_in_ else None
 
 
-def run_feature_engineering():
+def verify_no_target_proxy_leakage(df: pd.DataFrame, target_col: str, max_allowed_corr: float = 0.85) -> None:
     """
-    Executes Phase 2 Feature Engineering meeting FR-07, FR-08, FR-09, and FR-10.
+    Asserts that no predictor in df has |r| >= max_allowed_corr with target_col.
+    Raises ValueError if target proxy leakage is detected.
     """
-    print("=" * 60)
-    print("PHASE 2: FEATURE ENGINEERING STARTED")
-    print("=" * 60)
+    if target_col not in df.columns:
+        return
 
-    print(f"\nLoading cleaned data from: {CLEANED_DATA_PATH}")
-    df = pd.read_csv(CLEANED_DATA_PATH)
-    target_col = auto_detect_target(df)
-    print(f"Target column: '{target_col}'")
+    numeric_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c != target_col]
+    target_series = df[target_col]
 
-    X = df.drop(columns=[target_col]).copy()
-    y = df[target_col].copy()
-
-    # FR-07: Drop collinear features with Pearson correlation r > 0.90
-    print("\n--- CORRELATION FILTERING (FR-07) ---")
-    corr_matrix = X.corr().abs()
-    upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-    to_drop = set()
-
-    for col in upper_tri.columns:
-        for row in upper_tri.index:
-            if upper_tri.loc[row, col] > 0.90:
-                corr_val = upper_tri.loc[row, col]
-                if col not in to_drop and row not in to_drop:
-                    to_drop.add(col)
-                    print(f"  Dropping collinear feature '{col}' (r = {corr_val:.4f} with '{row}')")
-
-    if to_drop:
-        X = X.drop(columns=list(to_drop))
-        print(f"  Dropped {len(to_drop)} features. Remaining: {X.shape[1]}")
+    # If target is numeric
+    if np.issubdtype(target_series.dtype, np.number):
+        correlations = df[numeric_cols].apply(lambda s: s.corr(target_series)).abs()
     else:
-        print("  No features exceeded the 0.90 correlation threshold.")
+        # If categorical, map or encode temporarily for Pearson check
+        codes = pd.Series(pd.factorize(target_series)[0], index=df.index)
+        correlations = df[numeric_cols].apply(lambda s: s.corr(codes)).abs()
 
-    # FR-08: Feature Engineering (Composite Flood Vulnerability Score & Domain Indices)
-    print("\n--- COMPUTING FLOOD VULNERABILITY SCORE & INDICES (FR-08) ---")
-    X = engineer_domain_features(X)
-    print(f"  Generated features: {X.columns.tolist()[-4:]}")
-    print(f"  Total features after engineering: {X.shape[1]}")
-
-    # FR-09: Select top 12 features using SelectKBest (score_func=f_classif, k=12)
-    k_features = min(12, X.shape[1])
-    print(f"\n--- SELECTING TOP {k_features} FEATURES (SelectKBest, k=12) (FR-09) ---")
-    selector = SelectKBest(score_func=f_classif, k=k_features)
-    X_selected = selector.fit_transform(X, y)
-    selected_mask = selector.get_support()
-    selected_features = X.columns[selected_mask].tolist()
-    scores = selector.scores_[selected_mask]
-
-    print(f"Selected {len(selected_features)} features:")
-    for feat, score in sorted(zip(selected_features, scores), key=lambda x: -x[1]):
-        print(f"  - {feat:<30} F-Score: {score:.2f}")
-
-    # Save feature names and selector artifact for inference
-    joblib.dump(selected_features, SELECTED_FEATURES_PATH)
-    joblib.dump(selector, FEATURE_SELECTOR_PATH)
-    print(f"  Saved selected features list to: {SELECTED_FEATURES_PATH}")
-
-    # FR-10: Save final feature matrix to data/processed/features.csv
-    final_df = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
-    final_df[target_col] = y.values
-    final_df.to_csv(FEATURES_DATA_PATH, index=False)
-    print(f"\nFR-10: Saved final feature matrix to: {FEATURES_DATA_PATH}")
-    print(f"Final shape: {final_df.shape}")
-
-    print("=" * 60)
-    print("PHASE 2: FEATURE ENGINEERING COMPLETED")
-    print("=" * 60)
-
-    return final_df, target_col, selected_features
-
-
-if __name__ == "__main__":
-    run_feature_engineering()
+    violators = correlations[correlations >= max_allowed_corr]
+    if not violators.empty:
+        raise ValueError(
+            f"TARGET PROXY LEAKAGE DETECTED (F-01)! Features with |r| >= {max_allowed_corr}: "
+            f"{violators.to_dict()}"
+        )

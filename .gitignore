@@ -40,3 +40,6 @@ htmlcov/
 # OS generated
 .DS_Store
 Thumbs.db
+
+# Oversized model binaries (>100MB limit on GitHub)
+models/RandomForest_pipeline.pkl
