@@ -1,0 +1,22 @@
+{
+  "MonsoonIntensity": 5.0,
+  "TopographyDrainage": 5.0,
+  "RiverManagement": 5.0,
+  "Deforestation": 5.0,
+  "Urbanization": 5.0,
+  "ClimateChange": 5.0,
+  "DamsQuality": 5.0,
+  "Siltation": 5.0,
+  "AgriculturalPractices": 5.0,
+  "Encroachments": 5.0,
+  "IneffectiveDisasterPreparedness": 5.0,
+  "DrainageSystems": 5.0,
+  "CoastalVulnerability": 5.0,
+  "Landslides": 5.0,
+  "Watersheds": 5.0,
+  "DeterioratingInfrastructure": 5.0,
+  "PopulationScore": 5.0,
+  "WetlandLoss": 5.0,
+  "InadequatePlanning": 5.0,
+  "PoliticalFactors": 5.0
+}

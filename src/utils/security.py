@@ -37,6 +37,20 @@ FEATURE_BOUNDS = {
     "PoliticalFactors": (0.0, 15.0),
 }
 
+
+def validate_input_features(sample_input: Dict[str, Any]) -> Tuple[bool, str]:
+    """Validate input features are within expected bounds."""
+    for feat in EXPECTED_RAW_FEATURES:
+        if feat in sample_input:
+            val = sample_input[feat]
+            if not isinstance(val, (int, float)):
+                return False, f"Feature '{feat}' must be numeric, got {type(val).__name__}"
+            min_val, max_val = FEATURE_BOUNDS.get(feat, (0, 15))
+            if val < min_val or val > max_val:
+                return False, f"Feature '{feat}' = {val} out of bounds [{min_val}, {max_val}]"
+    return True, "OK"
+
+
 EXPECTED_RAW_FEATURES = [
     "MonsoonIntensity",
     "TopographyDrainage",
@@ -61,19 +75,6 @@ EXPECTED_RAW_FEATURES = [
 ]
 
 UNCERTAIN_THRESHOLD = 0.65  # Threshold from calibration tuning
-
-
-def validate_input_features(sample_input: Dict[str, Any]) -> Tuple[bool, str]:
-    """Validate input features are within expected bounds."""
-    for feat in EXPECTED_RAW_FEATURES:
-        if feat in sample_input:
-            val = sample_input[feat]
-            if not isinstance(val, (int, float)):
-                return False, f"Feature '{feat}' must be numeric, got {type(val).__name__}"
-            min_val, max_val = FEATURE_BOUNDS.get(feat, (0, 15))
-            if val < min_val or val > max_val:
-                return False, f"Feature '{feat}' = {val} out of bounds [{min_val}, {max_val}]"
-    return True, "OK"
 
 
 def compute_file_sha256(filepath: Path) -> str:

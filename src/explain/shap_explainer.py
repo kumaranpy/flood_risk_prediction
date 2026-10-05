@@ -54,7 +54,7 @@ def create_kernel_explainer(
     # Use a subset of background data to compute expected values
     background_sample = X_background.sample(n=min(50, len(X_background)), random_state=42)
 
-    # Get the column names from the background sample
+    # Get the column names from the background sample (RAW features, 20 features)
     feature_cols = list(background_sample.columns)
 
     # Create a lambda wrapper that converts numpy array → DataFrame
@@ -75,32 +75,9 @@ def create_kernel_explainer(
         background_summary,
     )
 
-    # Get feature names from the pipeline's feature selector
-    if hasattr(pipeline, "calibrated_classifiers_"):
-        base_pipeline = pipeline.calibrated_classifiers_[0].estimator
-    elif hasattr(pipeline, "estimator"):
-        base_pipeline = pipeline.estimator
-    else:
-        base_pipeline = pipeline
-
-    # Get feature names after SelectKBest (fit pipeline on background to populate output_features_)
-    try:
-        selector = base_pipeline.named_steps["feature_select"]
-        domain_features = base_pipeline.named_steps["domain_features"].output_features_
-        if domain_features is None:
-            # Fallback: run domain feature adder on background
-            X_domain = base_pipeline.named_steps["domain_features"].transform(
-                base_pipeline.named_steps["capper"].transform(background_sample)
-            )
-            domain_features = list(X_domain.columns)
-
-        selected_indices = selector.get_support(indices=True)
-        selected_names = [domain_features[i] for i in selected_indices]
-    except Exception:
-        # Ultimate fallback: use background column names
-        selected_names = feature_cols
-
-    return explainer, selected_names
+    # The SHAP KernelExplainer explains the RAW input features (20 features),
+    # not the selected features. Return the raw feature column names.
+    return explainer, feature_cols
 
 
 def compute_shap_values(
@@ -126,12 +103,35 @@ def compute_shap_values(
     
     # Create KernelExplainer wrapping the full pipeline
     explainer, feature_names = create_kernel_explainer(pipeline, X_background)
-
+    
     # Compute SHAP values — nsamples controls approximation quality vs. speed
     # shap_values will be a list of length n_classes, each (n_samples, n_features)
-    shap_values = explainer.shap_values(X_explain.values, nsamples=100)
-
-    return shap_values, feature_names, np.array([])  # X_transformed not used with KernelExplainer
+    raw_shap_values = explainer.shap_values(X_explain.values, nsamples=100)
+    
+    # Normalize SHAP values to consistent format: list of arrays per class
+    # KernelExplainer returns list of arrays for multi-class: [n_samples, n_features] per class
+    if isinstance(raw_shap_values, list):
+        shap_values = raw_shap_values
+    elif isinstance(raw_shap_values, np.ndarray):
+        # Handle 3D array format (n_samples, n_features, n_classes)
+        if raw_shap_values.ndim == 3:
+            n_classes = raw_shap_values.shape[2]
+            shap_values = [raw_shap_values[:, :, c] for c in range(raw_shap_values.shape[2])]
+        elif raw_shap_values.ndim == 2:
+            # Binary classification - wrap in list
+            shap_values = [raw_shap_values]
+        else:
+            raise ValueError(f"Unexpected SHAP values shape: {raw_shap_values.shape}")
+    else:
+        raise ValueError(f"Unexpected SHAP values type: {type(raw_shap_values)}")
+    
+    # Verify all class arrays have the same number of samples
+    n_samples = len(X_explain)
+    for c, arr in enumerate(shap_values):
+        if arr.shape[0] != n_samples:
+            logger.warning(f"Class {c} SHAP values have {arr.shape[0]} samples, expected {n_samples}")
+    
+    return shap_values, feature_names, np.array([])
 
 
 def plot_shap_summary(

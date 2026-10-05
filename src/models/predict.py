@@ -36,14 +36,21 @@ UNCERTAIN_THRESHOLD = get_threshold_config().get("decision_threshold", 0.65)
 def load_verified_pipeline(pipeline_name="best_pipeline") -> Any:
     """
     Load a verified model pipeline with SHA-256 checksum verification.
-    Accepts either a string model name or a Path object.
+    Accepts either a string model name or a Path object relative to the models directory.
     """
     from pathlib import Path as _Path
     from src.utils.security import load_verified_model
 
-    # Support Path objects (e.g. from tests creating tmp files)
+    # Resolve the model path relative to the models directory
     if isinstance(pipeline_name, _Path):
-        model_path = pipeline_name
+        # If Path is absolute, use as-is (for tmp files); otherwise resolve relative to models dir
+        if pipeline_name.is_absolute():
+            model_path = pipeline_name
+        else:
+            # Ensure .pkl extension for relative paths
+            model_path = get_paths()["models"] / pipeline_name
+            if model_path.suffix != ".pkl":
+                model_path = model_path.with_suffix(".pkl")
         checksums_path = get_paths()["models"].parent / "checksums.json"
     else:
         model_path = get_paths()["models"] / f"{pipeline_name}.pkl"
