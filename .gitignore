@@ -26,20 +26,17 @@ venv/
 env/
 ENV/
 .env
-.venv
 
-# IDE
+# IDE & OS
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Testing
+# Testing & Linting
 .pytest_cache/
 .coverage
 htmlcov/
@@ -47,36 +44,15 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Model artifacts (binary)
-*.pkl
-models/*.pkl
-models/v1/*.pkl
-models/RandomForest_pipeline.pkl
-models/checksums.json
-models/registry.json
-models/feature_medians.json
-models/target_bins.json
+# Streamlit secrets (NEVER commit secrets)
+.streamlit/secrets.toml
 
-# Data splits (generated)
-data/splits/*.csv
-data/raw/*.csv
+# Heavy oversized model binaries (>100MB exceeds GitHub hard limit)
+*RandomForest_pipeline.pkl
 
-# Outputs (generated)
-outputs/plots/*.png
-outputs/reports/*.csv
-outputs/reports/*.md
-outputs/reports/*.json
-
-# Logs
+# Temporary and local logs
 logs/
 *.log
-
-# Environment
 .env.local
 .env.production
-
-# Docker
 .docker/
-
-# CI/CD
-.github/workflows/*.yml.bak

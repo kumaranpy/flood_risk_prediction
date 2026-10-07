@@ -103,26 +103,46 @@ def validate_input_features(sample_input: Dict[str, Any]) -> Tuple[bool, str]:
     return True, "OK"
 
 
-class SecurityError(Exception):
-    """Raised when an artifact fails SHA-256 integrity verification."""
-    pass
+from src.utils.exceptions import SecurityError, InputValidationError
 
 
-def load_verified_pipeline(pipeline_path: Path = BEST_PIPELINE_PATH) -> Any:
+def load_verified_pipeline(pipeline_path: Any = None) -> Any:
     """
-    Verifies the SHA-256 checksum of the pipeline artifact against models/checksums.json
-    before deserializing with joblib.load().
+    Verifies the SHA-256 checksum of the pipeline artifact against checksums.json
+    before deserializing with joblib.load(). Supports Path or string pipeline name.
     """
+    if pipeline_path is None:
+        pipeline_path = BEST_PIPELINE_PATH
+
+    if isinstance(pipeline_path, str):
+        name_str = f"{pipeline_path}.pkl" if not pipeline_path.endswith(".pkl") else pipeline_path
+        pipeline_path = MODELS_DIR / name_str
+        if not pipeline_path.exists() and (MODELS_DIR / "v1" / name_str).exists():
+            pipeline_path = MODELS_DIR / "v1" / name_str
+    elif isinstance(pipeline_path, Path):
+        if not pipeline_path.exists() and (MODELS_DIR / "v1" / pipeline_path.name).exists():
+            pipeline_path = MODELS_DIR / "v1" / pipeline_path.name
+
     if not pipeline_path.exists():
         raise FileNotFoundError(f"Pipeline artifact not found at: {pipeline_path}")
 
-    if not CHECKSUMS_PATH.exists():
-        raise SecurityError(f"Security Alert: Checksums registry missing at: {CHECKSUMS_PATH}")
+    # Check checksums in models/ or models/v1/
+    chk_path = pipeline_path.parent / "checksums.json"
+    if not chk_path.exists():
+        chk_path = CHECKSUMS_PATH
 
-    with open(CHECKSUMS_PATH, "r", encoding="utf-8") as f:
+    if not chk_path.exists():
+        raise SecurityError(f"Security Alert: Checksums registry missing at: {chk_path}")
+
+    with open(chk_path, "r", encoding="utf-8") as f:
         checksums = json.load(f)
 
     expected_hash = checksums.get(pipeline_path.name)
+    if not expected_hash and CHECKSUMS_PATH.exists() and chk_path != CHECKSUMS_PATH:
+        with open(CHECKSUMS_PATH, "r", encoding="utf-8") as f:
+            checksums = json.load(f)
+        expected_hash = checksums.get(pipeline_path.name)
+
     if not expected_hash:
         raise SecurityError(f"Security Alert: No registered checksum for {pipeline_path.name}")
 
@@ -143,6 +163,7 @@ def load_verified_pipeline(pipeline_path: Path = BEST_PIPELINE_PATH) -> Any:
     return joblib.load(pipeline_path)
 
 
+
 def predict_single_instance(sample_input: Dict[str, Any], pipeline=None, confidence_threshold: float = UNCERTAIN_THRESHOLD) -> Tuple[str, float, Dict[str, float], str]:
     """
     Runs single-instance inference by passing raw inputs directly into the pipeline.
@@ -161,7 +182,7 @@ def predict_single_instance(sample_input: Dict[str, Any], pipeline=None, confide
     # Validate inputs
     is_valid, msg = validate_input_features(sample_input)
     if not is_valid:
-        raise ValueError(f"Input validation failed: {msg}")
+        raise InputValidationError(f"Input validation failed: {msg}")
     
     if pipeline is None:
         pipeline = load_verified_pipeline(BEST_PIPELINE_PATH)

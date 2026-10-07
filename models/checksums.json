@@ -1,9 +1,9 @@
 {
+  "best_pipeline.pkl": "9bb391b5c91daeee53e23262420b2a8a47bc5e8448bed5a540659fec763df9c4",
+  "KNN_pipeline.pkl": "2c1bf90a27d251830195c3f79f03848e2a89de0662d695a313552a8d3fbc9591",
+  "LightGBM_pipeline.pkl": "722fb2c78ee6795d6de7f9f5d1a43961605e00d7c5bad4907663c686b8aa9ce9",
   "LogisticRegression_pipeline.pkl": "9bb391b5c91daeee53e23262420b2a8a47bc5e8448bed5a540659fec763df9c4",
   "RandomForest_pipeline.pkl": "fa6c59f28491f3c893f32a1cff137dbf7845b1ca112a6e572e28d1907ac92ba3",
   "XGBoost_pipeline.pkl": "c2d0eb3b9e91eaecfd58b34b064857b14bb8b937df313baa8a5cb955e376c5b2",
-  "LightGBM_pipeline.pkl": "779e6dd011f93c6ca8b9f62ea1f45c450ac1f56411f7faff1256cfc76cc73c31",
-  "KNN_pipeline.pkl": "2c1bf90a27d251830195c3f79f03848e2a89de0662d695a313552a8d3fbc9591",
-  "best_pipeline.pkl": "9bb391b5c91daeee53e23262420b2a8a47bc5e8448bed5a540659fec763df9c4",
   "best_model.pkl": "e0b7b86b22ffb7c670ae397e8b354940574d834a648514ef33e6d7ac1ddbd8ae"
 }

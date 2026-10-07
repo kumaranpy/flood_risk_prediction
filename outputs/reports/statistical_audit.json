@@ -1,0 +1,649 @@
+{
+  "anova": [
+    {
+      "feature": "CoastalVulnerability",
+      "f_statistic": 61.227326999840756,
+      "p_value": 1.5584926159010728e-26,
+      "significant": true
+    },
+    {
+      "feature": "RiverManagement",
+      "f_statistic": 56.37362871930423,
+      "p_value": 1.5255007405252446e-24,
+      "significant": true
+    },
+    {
+      "feature": "ClimateChange",
+      "f_statistic": 55.86773555205753,
+      "p_value": 2.462790955075018e-24,
+      "significant": true
+    },
+    {
+      "feature": "Deforestation",
+      "f_statistic": 54.73573574685532,
+      "p_value": 7.198622667032417e-24,
+      "significant": true
+    },
+    {
+      "feature": "TopographyDrainage",
+      "f_statistic": 53.29827124664333,
+      "p_value": 2.815095403145287e-23,
+      "significant": true
+    },
+    {
+      "feature": "PoliticalFactors",
+      "f_statistic": 51.500099152737214,
+      "p_value": 1.5541431985933296e-22,
+      "significant": true
+    },
+    {
+      "feature": "DeterioratingInfrastructure",
+      "f_statistic": 48.04872401977356,
+      "p_value": 4.1613452603123846e-21,
+      "significant": true
+    },
+    {
+      "feature": "Encroachments",
+      "f_statistic": 47.09931781625678,
+      "p_value": 1.029920767258475e-20,
+      "significant": true
+    },
+    {
+      "feature": "MonsoonIntensity",
+      "f_statistic": 42.68187206236622,
+      "p_value": 7.058931456213973e-19,
+      "significant": true
+    },
+    {
+      "feature": "AgriculturalPractices",
+      "f_statistic": 41.02019355078144,
+      "p_value": 3.4782934160226015e-18,
+      "significant": true
+    },
+    {
+      "feature": "Urbanization",
+      "f_statistic": 40.34142205871647,
+      "p_value": 6.677485039745228e-18,
+      "significant": true
+    },
+    {
+      "feature": "Watersheds",
+      "f_statistic": 39.09381617926834,
+      "p_value": 2.216732949520774e-17,
+      "significant": true
+    },
+    {
+      "feature": "Landslides",
+      "f_statistic": 35.283598457970015,
+      "p_value": 8.730799046538645e-16,
+      "significant": true
+    },
+    {
+      "feature": "WetlandLoss",
+      "f_statistic": 35.243171211343956,
+      "p_value": 9.07846477455865e-16,
+      "significant": true
+    },
+    {
+      "feature": "Siltation",
+      "f_statistic": 34.86976451985939,
+      "p_value": 1.3022081320322761e-15,
+      "significant": true
+    },
+    {
+      "feature": "PopulationScore",
+      "f_statistic": 32.997766104815426,
+      "p_value": 7.960819439061808e-15,
+      "significant": true
+    },
+    {
+      "feature": "IneffectiveDisasterPreparedness",
+      "f_statistic": 32.15533264236525,
+      "p_value": 1.7999590694969794e-14,
+      "significant": true
+    },
+    {
+      "feature": "InadequatePlanning",
+      "f_statistic": 31.98066543903544,
+      "p_value": 2.1318625649665202e-14,
+      "significant": true
+    },
+    {
+      "feature": "DamsQuality",
+      "f_statistic": 28.82301014353748,
+      "p_value": 4.56658984594468e-13,
+      "significant": true
+    },
+    {
+      "feature": "DrainageSystems",
+      "f_statistic": 20.59454066233348,
+      "p_value": 1.4024705669291886e-09,
+      "significant": true
+    }
+  ],
+  "chi2": [
+    {
+      "feature": "CoastalVulnerability",
+      "chi2_statistic": 97.65243021014842,
+      "p_value": 3.108150976508501e-20,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "Deforestation",
+      "chi2_statistic": 88.36189472833071,
+      "p_value": 2.9336864000016082e-18,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "TopographyDrainage",
+      "chi2_statistic": 87.72810368595103,
+      "p_value": 3.999289330208327e-18,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "ClimateChange",
+      "chi2_statistic": 87.12654520822957,
+      "p_value": 5.3664633920221715e-18,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "PoliticalFactors",
+      "chi2_statistic": 83.81248462839605,
+      "p_value": 2.709384779647828e-17,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "Encroachments",
+      "chi2_statistic": 83.62082063108598,
+      "p_value": 2.9752187628912534e-17,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "RiverManagement",
+      "chi2_statistic": 80.68809598513592,
+      "p_value": 1.2451325178682998e-16,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "DeterioratingInfrastructure",
+      "chi2_statistic": 80.65477967501162,
+      "p_value": 1.2655377399741012e-16,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "MonsoonIntensity",
+      "chi2_statistic": 71.69234261703616,
+      "p_value": 9.967769126082108e-15,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "AgriculturalPractices",
+      "chi2_statistic": 70.47802852865671,
+      "p_value": 1.7991481775223705e-14,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "PopulationScore",
+      "chi2_statistic": 64.49903629682218,
+      "p_value": 3.280934648880085e-13,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "Siltation",
+      "chi2_statistic": 61.80970869440952,
+      "p_value": 1.207950281335639e-12,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "DamsQuality",
+      "chi2_statistic": 56.85621535004321,
+      "p_value": 1.3261481452073824e-11,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "Urbanization",
+      "chi2_statistic": 56.37775381787134,
+      "p_value": 1.6708739667579166e-11,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "InadequatePlanning",
+      "chi2_statistic": 55.079387601641166,
+      "p_value": 3.126887514003286e-11,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "IneffectiveDisasterPreparedness",
+      "chi2_statistic": 52.68394478205757,
+      "p_value": 9.923310681279748e-11,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "Watersheds",
+      "chi2_statistic": 51.24674531502472,
+      "p_value": 1.9823197973906053e-10,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "Landslides",
+      "chi2_statistic": 49.997800065135934,
+      "p_value": 3.6146864934967327e-10,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "WetlandLoss",
+      "chi2_statistic": 45.62427531198235,
+      "p_value": 2.948579760131582e-09,
+      "dof": 4,
+      "significant": true
+    },
+    {
+      "feature": "DrainageSystems",
+      "chi2_statistic": 38.914962718301716,
+      "p_value": 7.253963702242677e-08,
+      "dof": 4,
+      "significant": true
+    }
+  ],
+  "pearson": [
+    {
+      "feature": "MonsoonIntensity",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "TopographyDrainage",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "RiverManagement",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "Deforestation",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "Urbanization",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "ClimateChange",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "DamsQuality",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "Siltation",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "AgriculturalPractices",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "Encroachments",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "IneffectiveDisasterPreparedness",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "DrainageSystems",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "CoastalVulnerability",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "Landslides",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "Watersheds",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "DeterioratingInfrastructure",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "PopulationScore",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "WetlandLoss",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "InadequatePlanning",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    },
+    {
+      "feature": "PoliticalFactors",
+      "correlation": NaN,
+      "p_value": NaN,
+      "significant": false
+    }
+  ],
+  "vif": [
+    {
+      "feature": "RiverManagement",
+      "VIF": 6.167454929581351,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "MonsoonIntensity",
+      "VIF": 6.075142305857603,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "Siltation",
+      "VIF": 5.957486461567537,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "InadequatePlanning",
+      "VIF": 5.891205611004319,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "Encroachments",
+      "VIF": 5.887972814176482,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "CoastalVulnerability",
+      "VIF": 5.861914833874108,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "IneffectiveDisasterPreparedness",
+      "VIF": 5.826240411921601,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "DeterioratingInfrastructure",
+      "VIF": 5.814988952755138,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "WetlandLoss",
+      "VIF": 5.770443952952889,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "DamsQuality",
+      "VIF": 5.731769361290273,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "Landslides",
+      "VIF": 5.721628158836375,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "TopographyDrainage",
+      "VIF": 5.688474752817703,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "AgriculturalPractices",
+      "VIF": 5.640786207185792,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "Deforestation",
+      "VIF": 5.64054687693844,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "ClimateChange",
+      "VIF": 5.625486091325258,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "DrainageSystems",
+      "VIF": 5.605531715483719,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "Watersheds",
+      "VIF": 5.598977961574713,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "Urbanization",
+      "VIF": 5.441483299449564,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "PoliticalFactors",
+      "VIF": 5.43864039682329,
+      "concern_level": "MODERATE"
+    },
+    {
+      "feature": "PopulationScore",
+      "VIF": 5.414889455417693,
+      "concern_level": "MODERATE"
+    }
+  ],
+  "ablation": [
+    {
+      "feature_dropped": "NONE (baseline)",
+      "f1_weighted": 0.6876014600883018,
+      "drop": 0.0
+    }
+  ],
+  "ks_drift": [
+    {
+      "feature": "Deforestation",
+      "ks_statistic": 0.056,
+      "p_value": 0.15905255368277962,
+      "drift_detected": false
+    },
+    {
+      "feature": "DrainageSystems",
+      "ks_statistic": 0.055,
+      "p_value": 0.17387409296302875,
+      "drift_detected": false
+    },
+    {
+      "feature": "ClimateChange",
+      "ks_statistic": 0.047,
+      "p_value": 0.3338009458448505,
+      "drift_detected": false
+    },
+    {
+      "feature": "PopulationScore",
+      "ks_statistic": 0.0455,
+      "p_value": 0.3725202652264404,
+      "drift_detected": false
+    },
+    {
+      "feature": "InadequatePlanning",
+      "ks_statistic": 0.0425,
+      "p_value": 0.4579757604274794,
+      "drift_detected": false
+    },
+    {
+      "feature": "DeterioratingInfrastructure",
+      "ks_statistic": 0.0415,
+      "p_value": 0.4886236700327557,
+      "drift_detected": false
+    },
+    {
+      "feature": "DamsQuality",
+      "ks_statistic": 0.038,
+      "p_value": 0.6022836938849673,
+      "drift_detected": false
+    },
+    {
+      "feature": "Encroachments",
+      "ks_statistic": 0.031,
+      "p_value": 0.8298908380764453,
+      "drift_detected": false
+    },
+    {
+      "feature": "Urbanization",
+      "ks_statistic": 0.029,
+      "p_value": 0.8838087811940817,
+      "drift_detected": false
+    },
+    {
+      "feature": "WetlandLoss",
+      "ks_statistic": 0.0265,
+      "p_value": 0.9373213867172837,
+      "drift_detected": false
+    },
+    {
+      "feature": "PoliticalFactors",
+      "ks_statistic": 0.026,
+      "p_value": 0.9459020062036878,
+      "drift_detected": false
+    },
+    {
+      "feature": "Landslides",
+      "ks_statistic": 0.0255,
+      "p_value": 0.9537457116156174,
+      "drift_detected": false
+    },
+    {
+      "feature": "Siltation",
+      "ks_statistic": 0.0255,
+      "p_value": 0.9537457116156174,
+      "drift_detected": false
+    },
+    {
+      "feature": "MonsoonIntensity",
+      "ks_statistic": 0.0255,
+      "p_value": 0.9537457116156174,
+      "drift_detected": false
+    },
+    {
+      "feature": "Watersheds",
+      "ks_statistic": 0.0215,
+      "p_value": 0.9915848913131095,
+      "drift_detected": false
+    },
+    {
+      "feature": "CoastalVulnerability",
+      "ks_statistic": 0.021,
+      "p_value": 0.9936913236881783,
+      "drift_detected": false
+    },
+    {
+      "feature": "IneffectiveDisasterPreparedness",
+      "ks_statistic": 0.021,
+      "p_value": 0.9936913236881783,
+      "drift_detected": false
+    },
+    {
+      "feature": "RiverManagement",
+      "ks_statistic": 0.02,
+      "p_value": 0.996691023060583,
+      "drift_detected": false
+    },
+    {
+      "feature": "AgriculturalPractices",
+      "ks_statistic": 0.017,
+      "p_value": 0.9997764656446647,
+      "drift_detected": false
+    },
+    {
+      "feature": "TopographyDrainage",
+      "ks_statistic": 0.013,
+      "p_value": 0.9999997930042193,
+      "drift_detected": false
+    }
+  ],
+  "noise_stress": [
+    {
+      "noise_level": 0.05,
+      "f1_weighted_mean": 0.6939123382048107,
+      "f1_weighted_std": 0.009360768714939344,
+      "f1_weighted_min": 0.6775191538021725,
+      "f1_weighted_max": 0.7019204069181282
+    },
+    {
+      "noise_level": 0.1,
+      "f1_weighted_mean": 0.6943805640043912,
+      "f1_weighted_std": 0.012014127285764854,
+      "f1_weighted_min": 0.6781135964790558,
+      "f1_weighted_max": 0.7091284719260839
+    },
+    {
+      "noise_level": 0.15,
+      "f1_weighted_mean": 0.6886747135012735,
+      "f1_weighted_std": 0.006847408702494994,
+      "f1_weighted_min": 0.6814104398847266,
+      "f1_weighted_max": 0.6992502546959567
+    },
+    {
+      "noise_level": 0.2,
+      "f1_weighted_mean": 0.6805824332062188,
+      "f1_weighted_std": 0.00508657737969611,
+      "f1_weighted_min": 0.6722794655044655,
+      "f1_weighted_max": 0.6873517123606144
+    }
+  ]
+}

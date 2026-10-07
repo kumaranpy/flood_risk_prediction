@@ -41,22 +41,33 @@ def load_verified_pipeline(pipeline_name="best_pipeline") -> Any:
     from pathlib import Path as _Path
     from src.utils.security import load_verified_model
 
+    models_dir = get_paths()["models"]
+    fallback_dir = models_dir.parent if models_dir.name == "v1" else models_dir / "v1"
+
     # Resolve the model path relative to the models directory
     if isinstance(pipeline_name, _Path):
-        # If Path is absolute, use as-is (for tmp files); otherwise resolve relative to models dir
         if pipeline_name.is_absolute():
             model_path = pipeline_name
         else:
-            # Ensure .pkl extension for relative paths
-            model_path = get_paths()["models"] / pipeline_name
+            model_path = models_dir / pipeline_name
             if model_path.suffix != ".pkl":
                 model_path = model_path.with_suffix(".pkl")
-        checksums_path = get_paths()["models"].parent / "checksums.json"
+            if not model_path.exists() and (fallback_dir / model_path.name).exists():
+                model_path = fallback_dir / model_path.name
     else:
-        model_path = get_paths()["models"] / f"{pipeline_name}.pkl"
+        name_str = f"{pipeline_name}.pkl" if not str(pipeline_name).endswith(".pkl") else str(pipeline_name)
+        model_path = models_dir / name_str
+        if not model_path.exists() and (fallback_dir / name_str).exists():
+            model_path = fallback_dir / name_str
+
+    checksums_path = model_path.parent / "checksums.json"
+    if not checksums_path.exists():
         checksums_path = get_paths()["models"].parent / "checksums.json"
+    if not checksums_path.exists():
+        checksums_path = get_paths()["models"] / "checksums.json"
 
     return load_verified_model(model_path, checksums_path)
+
 
 
 def predict_single_instance(

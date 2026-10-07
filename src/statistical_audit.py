@@ -149,11 +149,16 @@ def pearson_significance_matrix(
     numeric_X = X.select_dtypes(include=[np.number])
     
     if y is not None:
+        if not np.issubdtype(y.dtype, np.number):
+            label_map = {"Low": 0, "Medium": 1, "High": 2}
+            y_numeric = y.map(label_map).fillna(0)
+        else:
+            y_numeric = y
         # Feature-target correlations
         results = []
         for feat in numeric_X.columns:
             try:
-                r, p = pearsonr(numeric_X[feat], y)
+                r, p = pearsonr(numeric_X[feat], y_numeric)
                 results.append({
                     "feature": feat,
                     "correlation": float(r),
