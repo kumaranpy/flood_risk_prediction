@@ -1,50 +1,47 @@
-# Model Card: Flood Risk Prediction Pipeline
+# 🌊 AquaSense Model Card: Intelligent Flood Risk Intelligence
 
 ## Model Details
+- **System**: AquaSense
 - **Architecture**: CalibratedClassifierCV(LogisticRegression) / LogisticRegression (native calibration)
 - **Version**: 1.0.0
-- **Date**: September 17, 2026
-- **Training Data**: Kaggle Playground Series S4E5 (synthetic, 50,000 samples)
-- **Classes**: Low, Medium, High flood risk
-- **Features**: 20 raw environmental/infrastructure factors + 15 engineered features (domain indices, interactions, ratios, row statistics)
+- **Date**: October 7, 2026
+- **Training Data**: Kaggle Playground Series S4E5 (synthetic benchmark, 40,000 train / 10,000 test split)
+- **Classes**: Low, Medium, High flood risk (discretized tertiles)
+- **Features**: 20 raw environmental/infrastructure factors + 14 fold-safe engineered features (domain indices, interactions, ratios)
+- **Tagline**: *Intelligent Flood Risk Intelligence*
 
-## Intended Use
-- Educational and benchmarking purposes
-- Synthetic dataset evaluation
-- Research on flood risk modeling with ML
-- **NOT for operational disaster management or life-safety decisions**
+## Intended Use & Safety Bounds
+- Academic simulation and benchmarking research
+- Evaluation of inductive bias alignment on linear synthetic surfaces
+- **CRITICAL**: Simulation only — NOT for operational disaster management, emergency dispatch, or life-safety decisions.
 
 ## Performance Metrics (Held-out Test, 10,000 samples)
 
 | Metric | Score |
 |:---|:---:|
-| Accuracy | 0.9824 |
-| F1-Weighted | 0.9824 |
-| F1-Macro | 0.9826 |
-| ROC-AUC (OvR) | 0.9987 |
-| Brier Score | 0.0355 |
+| Accuracy | 0.7134 |
+| F1-Weighted | 0.7130 |
+| F1-Macro | 0.7155 |
+| ROC-AUC (OvR) | 0.8781 |
+| Brier Score | 0.3811 |
 
 ### Per-Class Performance
 | Class | Precision | Recall | F1-Score | Support |
 |:---|:---:|:---:|:---:|:---:|
-| Low | 0.9853 | 0.9859 | 0.9856 | 3,189 |
-| Medium | 0.9904 | 0.9844 | 0.9874 | 3,338 |
-| High | 0.9722 | 0.9773 | 0.9747 | 3,473 |
+| Low | 0.7730 | 0.7846 | 0.7788 | 3,338 |
+| Medium | 0.5991 | 0.5926 | 0.5958 | 3,473 |
+| High | 0.7734 | 0.7705 | 0.7719 | 3,189 |
 
-### Threshold Tuning (High-Risk Class)
-| Threshold | Precision | Recall | F1 |
-|:---:|:---:|:---:|:---:|
-| 0.35 | 0.9621 | 0.9937 | 0.9776 |
-| 0.50 | 0.9853 | 0.9859 | 0.9856 |
-| **0.65 (optimal)** | **0.9857** | **0.9857** | **0.9857** |
+### Decision Threshold
+- Decision Threshold = 0.65 for high-confidence predictions (returns UNCERTAIN when max_prob < 0.65).
 
 ### Cost-Sensitive Evaluation (High-Risk Class)
 | Metric | Value |
 |:---|:---:|
-| False Negatives (High) | 45 |
-| False Positives (High) | 47 |
-| Cost (5×FN + 1×FP) | 272 |
-| Cost-Normalized | 0.0171 |
+| False Negatives (High) | 732 |
+| False Positives (High) | 720 |
+| Cost (5×FN + 1×FP) | 4,380 |
+| Cost-Normalized | 0.4380 |
 
 ## Inductive Bias & Model Selection Rationale
 
@@ -60,20 +57,19 @@ The true decision boundary is a **hyperplane** — the optimal inductive bias fo
 
 | Model Family | Inductive Bias | Test F1 | Why |
 |---|---|---|---|
-| **Logistic Regression** | Linear decision boundaries, L2 regularization | **0.9824** | Exact match for linear target; learns hyperplane directly |
-| **Tree Ensembles (RF, XGB, LGBM)** | Axis-aligned splits, piecewise constant | 0.93-0.96 | Approximates diagonal hyperplane with many orthogonal splits |
-| **KNN** | Local similarity in feature space | 0.8463 | Curse of dimensionality; no explicit boundary learning |
+| **Logistic Regression** | Linear decision boundaries, L2 regularization | **0.7130** | Exact match for linear target; learns hyperplane directly |
+| **Tree Ensembles (RF, XGB, LGBM)** | Axis-aligned splits, piecewise constant | 0.67-0.71 | Approximates diagonal hyperplane with many orthogonal splits |
+| **KNN** | Local similarity in feature space | 0.6333 | Curse of dimensionality; no explicit boundary learning |
 
 ### Domain Feature Synthesis
 
-`DomainFeatureAdder` engineers **15 features** giving linear models non-linear expressiveness:
+`DomainFeatureAdder` engineers **14 features** giving linear models non-linear expressiveness without proxy leakage:
 
 | Category | Features | Purpose |
 |---|---|---|
 | **Domain Indices (4)** | `Environmental_Risk`, `Infrastructure_Vulnerability`, `Anthropogenic_Pressure`, `Hydrometeorological_Risk` | Bounded sub-domain aggregation (no global leakage) |
 | **Interactions (5)** | `MonsoonIntensity_x_Urbanization`, `Deforestation_x_RiverManagement`, `ClimateChange_x_DamsQuality`, `Siltation_x_AgriculturalPractices`, `TopographyDrainage_x_MonsoonIntensity` | Compounding risk factors |
 | **Ratio Features (5)** | `Water_Stress`, `Infra_Gap`, `Eco_Damage`, `Siltation_Pressure`, `Preparedness_Deficit` | **Scale-invariant** — critical for distribution shift robustness |
-| **Row Statistics (1)** | `Row_Mean` | Captures S4E5 linear target structure |
 
 These features transform the problem so **Logistic Regression's linear bias becomes an asset**.
 
@@ -81,14 +77,14 @@ These features transform the problem so **Logistic Regression's linear bias beco
 
 ### Preprocessing (Fold-Safe)
 1. **OutlierCapper**: 1st/99th percentile clipping (fit on training fold only)
-2. **DomainFeatureAdder**: Domain-specific indices + interaction features + ratio features + row statistics
+2. **DomainFeatureAdder**: Domain-specific indices + interaction features + ratio features
 3. **StandardScaler**: Z-score normalization (fit on training fold only)
 4. **SelectKBest**: Top 12 features by ANOVA F-score (fit on training fold only)
 
 ### Model Selection
 - Candidate models: LogisticRegression, RandomForest, XGBoost, LightGBM, KNN
 - Selection: 5-fold CV with F1-weighted scoring (full training data, no subsampling)
-- Best model: LogisticRegression (CV F1 = 0.9804)
+- Best model: LogisticRegression (CV F1 = 0.7130)
 
 ### Calibration
 - **LogisticRegression: Skipped** (natively well-calibrated via log-loss optimization)
@@ -96,20 +92,20 @@ These features transform the problem so **Logistic Regression's linear bias beco
 - Brier comparison: OvR average of `brier_score_loss`
 
 ### Decision Threshold
-- **UNCERTAIN** if max probability < 0.65 (optimized for High-risk class F1)
+- **UNCERTAIN** if max probability < 0.65 (confidence guardrail)
 - Otherwise: argmax of calibrated probabilities
 
 ## Robustness Testing Results
 
 | Perturbation | Accuracy | F1-Weighted | Δ Accuracy | Δ F1 |
 |:---|:---:|:---:|:---:|:---:|
-| Baseline | 0.9824 | 0.9824 | - | - |
-| Noise 10% | 0.9398 | 0.9397 | -0.0426 | -0.0427 |
-| Noise 20% | 0.8790 | 0.8786 | -0.1034 | -0.1038 |
-| Missing 10% | 0.8179 | 0.8193 | -0.1645 | -0.1631 |
-| Missing 20% | 0.7425 | 0.7454 | -0.2399 | -0.2370 |
-| Scale 1.2x | 0.4243 | 0.3641 | -0.5581 | -0.6183 |
-| Scale 1.5x | 0.3268 | 0.1766 | -0.6556 | -0.8058 |
+| Baseline | 0.7134 | 0.7130 | - | - |
+| Noise 10% | 0.7117 | 0.7113 | -0.0017 | -0.0018 |
+| Noise 20% | 0.7011 | 0.7003 | -0.0123 | -0.0127 |
+| Missing 10% | 0.6738 | 0.6750 | -0.0396 | -0.0381 |
+| Missing 20% | 0.6352 | 0.6382 | -0.0782 | -0.0748 |
+| Scale 1.2x | 0.5175 | 0.4848 | -0.1959 | -0.2282 |
+| Scale 1.5x | 0.3468 | 0.2193 | -0.3666 | -0.4937 |
 
 ⚠️ **WARNING**: Model shows significant fragility under distribution shift (scale changes). Ratio features provide partial mitigation but do not fully resolve this fundamental limitation of learning absolute magnitudes.
 

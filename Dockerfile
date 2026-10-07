@@ -18,6 +18,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Runtime stage
 FROM python:3.11-slim
 
+LABEL org.opencontainers.image.title="AquaSense"
+LABEL org.opencontainers.image.description="AquaSense: Intelligent Flood Risk Intelligence"
+LABEL org.opencontainers.image.version="1.0.0"
+
 WORKDIR /app
 
 # Install runtime dependencies

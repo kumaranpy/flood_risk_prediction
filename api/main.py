@@ -26,9 +26,9 @@ setup_logging()
 logger = get_logger(__name__)
 
 app = FastAPI(
-    title="Flood Risk Prediction API",
+    title="AquaSense API",
     version="1.0.0",
-    description="Production-ready flood risk classification API with calibrated probabilities and drift detection.",
+    description="AquaSense: Intelligent Flood Risk Intelligence REST API with calibrated probabilities, security verification, and drift monitoring.",
     docs_url="/docs",
     redoc_url="/redoc",
 )

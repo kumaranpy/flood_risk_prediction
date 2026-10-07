@@ -1,25 +1,26 @@
-# 🌊 Flood Risk Prediction System
+# 🌊 AquaSense: Intelligent Flood Risk Intelligence
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://aquasense.streamlit.app)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit App](https://img.shields.io/badge/Streamlit-1.37.1-FF4B4B.svg)](https://streamlit.io/)
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.5.1-F7931E.svg)](https://scikit-learn.org/)
 [![CI Pipeline](https://github.com/kumaranpy/flood_risk_prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/kumaranpy/flood_risk_prediction/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An end-to-end, production-grade Machine Learning system that classifies simulated regional environmental profiles into **High**, **Medium**, or **Low** flood risk categories.
+**AquaSense** is an end-to-end, production-grade Machine Learning intelligence system that classifies simulated regional environmental profiles into **High**, **Medium**, or **Low** flood risk categories with calibrated probability estimates and zero target leakage.
 
 > [!IMPORTANT]
-> **SIMULATION & BENCHMARK DISCLAIMER (F-10 / Operational Safety)**:
-> This system is an academic research and engineering demonstration trained on the **Kaggle Playground Series s4e5 synthetic benchmark dataset**. It does **NOT** ingest real-time geospatial telemetry, radar weather feeds, or casualty history. It must **NOT** be used for operational disaster management, emergency evacuation dispatch, or life-safety decisions.
+> **SIMULATION & BENCHMARK DISCLAIMER (Operational Safety)**:
+> AquaSense is an academic research and engineering demonstration trained on the **Kaggle Playground Series s4e5 synthetic benchmark dataset**. It does **NOT** ingest real-time geospatial telemetry, radar weather feeds, or casualty history. It must **NOT** be used for operational disaster management, emergency evacuation dispatch, or life-safety decisions.
 
 ---
 
 ## 📌 Executive Summary
 
-Predicting flood vulnerability from multidimensional environmental and infrastructure predictors is a critical modeling benchmark. This repository implements an end-to-end ML pipeline with fold-safe transformers, calibrated probability outputs, and cryptographic artifact verification:
+Predicting flood vulnerability from multidimensional environmental and infrastructure predictors is a critical modeling benchmark. **AquaSense** implements a production-grade ML pipeline with fold-safe transformers, calibrated probability outputs, cryptographic artifact verification, and an interactive deep-ocean dark theme web dashboard:
 
 - **Primary Architecture**: `CalibratedClassifierCV` wrapping a unified `scikit-learn` Pipeline (`OutlierCapper` $\rightarrow$ `DomainFeatureAdder` $\rightarrow$ `StandardScaler` $\rightarrow$ `SelectKBest` $\rightarrow$ `Classifier`).
-- **Realistic, Leakage-Free Benchmark**: **`98.24%` Accuracy** | **`0.9824` Weighted F1** | **`0.9987` ROC-AUC (OvR)** | **`0.0355` Brier Reliability Score**.
+- **Realistic, Leakage-Free Benchmark**: **`71.34%` Accuracy** | **`0.7130` Weighted F1** | **`0.8781` ROC-AUC (OvR)** | **`0.3811` Brier Reliability Score**.
 - **Evaluated Strictly on Held-Out Split**: 10,000 completely untouched test samples (`data/splits/test.csv`).
 - **Zero Target Proxy Leakage (F-01)**: All global row-wise sum/mean proxies removed; all predictors verified to have $|r| < 0.85$ with target.
 - **Cryptographic Security Guardrail (SEC-01)**: Mandatory SHA-256 hash validation before deserializing binary model artifacts (`models/checksums.json`).
@@ -57,12 +58,12 @@ Evaluated strictly on the untouched test partition of **10,000 samples**, sorted
 
 | Rank | Model Pipeline | Accuracy | F1-Score (Weighted) | F1-Score (Macro) | ROC-AUC (OvR) | Brier Reliability Score |
 |:---:|:---|:---:|:---:|:---:|:---:|:---:|
-| 🥇 | **`best_pipeline` (LogisticRegression, Native Calibration)** | **98.24%** | **0.9824** | **0.9826** | **0.9987** | **0.0355** |
-| 🥈 | **Logistic Regression Pipeline** | 98.13% | 0.9813 | 0.9815 | 0.9986 | 0.0401 |
-| 🥉 | **LightGBM Pipeline** | 96.11% | 0.9611 | 0.9614 | 0.9966 | 0.0580 |
-| 4 | **XGBoost Pipeline** | 95.87% | 0.9587 | 0.9591 | 0.9961 | 0.0623 |
-| 5 | **Random Forest Pipeline** | 93.57% | 0.9357 | 0.9363 | 0.9924 | 0.0936 |
-| 6 | **KNN Pipeline** | 84.51% | 0.8463 | 0.8475 | 0.9554 | 0.2284 |
+| 🥇 | **`best_pipeline` (LogisticRegression, Native Calibration)** | **71.34%** | **0.7130** | **0.7155** | **0.8781** | **0.3811** |
+| 🥈 | **Logistic Regression Pipeline** | 71.34% | 0.7130 | 0.7155 | 0.8781 | 0.3811 |
+| 🥉 | **LightGBM Pipeline** | 70.91% | 0.7090 | 0.7115 | 0.8735 | 0.3875 |
+| 4 | **XGBoost Pipeline** | 70.05% | 0.7018 | 0.7042 | 0.8696 | 0.3927 |
+| 5 | **Random Forest Pipeline** | 67.46% | 0.6753 | 0.6778 | 0.8480 | 0.4315 |
+| 6 | **KNN Pipeline** | 63.49% | 0.6333 | 0.6361 | 0.8152 | 0.4649 |
 
 *Note: Brier score measures probability calibration accuracy (lower is better; 0 indicates perfect probability calibration). The Logistic Regression pipeline uses native log-loss calibration, avoiding unnecessary `CalibratedClassifierCV` wrapper.*
 
@@ -82,33 +83,32 @@ This means the **true decision boundary is a hyperplane** in the 20-dimensional 
 
 | Model Family | Inductive Bias | Performance on S4E5 | Why |
 |---|---|---|---|
-| **Logistic Regression** | Linear decision boundaries, L2 regularization | **98.24% F1** | Exact match for linear target; learns hyperplane directly with minimal overfitting |
-| **Tree Ensembles (RF, XGB, LGBM)** | Axis-aligned splits, piecewise constant | 93-96% F1 | Must approximate diagonal hyperplane with many orthogonal splits; wastes capacity |
-| **KNN** | Local similarity in feature space | 84.5% F1 | Suffers from curse of dimensionality; no explicit boundary learning |
+| **Logistic Regression** | Linear decision boundaries, L2 regularization | **71.30% F1** | Exact match for linear target; learns hyperplane directly with minimal overfitting |
+| **Tree Ensembles (RF, XGB, LGBM)** | Axis-aligned splits, piecewise constant | 67-71% F1 | Must approximate diagonal hyperplane with many orthogonal splits; wastes capacity |
+| **KNN** | Local similarity in feature space | 63.3% F1 | Suffers from curse of dimensionality; no explicit boundary learning |
 
 ### Domain Feature Synthesis: Giving Linear Models Non-Linear Expressiveness
 
-While the S4E5 target is globally linear, **real flood risk is driven by non-linear interactions** (e.g., heavy rain × poor drainage compounds risk). Our `DomainFeatureAdder` engineers **15 features** that provide the linear model with non-linear expressiveness *without* tree overfitting:
+While the S4E5 target is globally linear, **real flood risk is driven by non-linear interactions** (e.g., heavy rain × poor drainage compounds risk). Our `DomainFeatureAdder` engineers **14 domain features** that provide the linear model with non-linear expressiveness *without* circular target leakage:
 
 | Category | Features | Purpose |
 |---|---|---|
 | **Domain Indices (4)** | `Environmental_Risk`, `Infrastructure_Vulnerability`, `Anthropogenic_Pressure`, `Hydrometeorological_Risk` | Aggregate logically bounded sub-domains (no global leakage) |
 | **Interactions (5)** | `MonsoonIntensity_x_Urbanization`, `Deforestation_x_RiverManagement`, `ClimateChange_x_DamsQuality`, `Siltation_x_AgriculturalPractices`, `TopographyDrainage_x_MonsoonIntensity` | Capture compounding effects |
 | **Ratio Features (5)** | `Water_Stress`, `Infra_Gap`, `Eco_Damage`, `Siltation_Pressure`, `Preparedness_Deficit` | **Scale-invariant** — critical for distribution shift robustness |
-| **Row Statistics (1)** | `Row_Mean` | Captures S4E5 linear target structure |
 
 These features transform the problem into one where **Logistic Regression's linear bias becomes an asset, not a limitation**.
 
 ### Distribution Shift Fragility: The Fundamental Limitation
 
-Despite 98% accuracy, the model is **fragile to scale shifts** because it learns absolute magnitudes, not invariant relationships:
+Despite strong in-distribution performance, the model is **fragile to scale shifts** because it learns absolute magnitudes, not invariant relationships:
 
 | Perturbation | Accuracy Drop | F1 Drop | Root Cause |
 |---|---|---|---|
-| 10% Gaussian Noise | -4.3% | -4.3% | StandardScaler sensitivity |
-| 10% Missing Data | -16.5% | -16.3% | Imputation from train medians |
-| **1.2× Scale Shift** | **-55.8%** | **-61.8%** | Learns absolute magnitudes |
-| **1.5× Scale Shift** | **-65.6%** | **-80.6%** | Ratio features partially mitigate |
+| 10% Gaussian Noise | -0.17% | -0.18% | StandardScaler sensitivity |
+| 10% Missing Data | -3.96% | -3.81% | Imputation from train medians |
+| **1.2× Scale Shift** | **-19.59%** | **-22.82%** | Learns absolute magnitudes |
+| **1.5× Scale Shift** | **-36.66%** | **-49.37%** | Ratio features partially mitigate |
 
 **Mitigation strategy implemented**: Ratio features (`Water_Stress`, `Infra_Gap`, etc.) are inherently scale-invariant. Future work: replace `StandardScaler` with `RobustScaler`, add adversarial training.
 
@@ -154,9 +154,9 @@ In the raw Kaggle s4e5 dataset, the continuous probability is a linear function 
 - **Input validation** with feature bounds checking (1st/99th percentile clips from training).
 
 ### 4. Decision-Safe Output Layer
-- **UNCERTAIN class** returned when `max_prob < 0.65` (threshold from High-risk F1 optimization).
-- **Cost-sensitive evaluation**: 5×FN + 1×FP for High-risk class (cost-normalized: 0.0171).
-- **Threshold tuning**: Optimal High-risk threshold = 0.65 (F1=0.9857).
+- **UNCERTAIN class** returned when `max_prob < 0.65` (safety margin threshold).
+- **Cost-sensitive evaluation**: 5×FN + 1×FP for High-risk class penalty.
+- **Threshold tuning**: Optimal decision threshold = 0.65 for high-confidence classification.
 
 ### 5. Statistical Rigor & Feature Validation
 - **ANOVA**: Mean differences across risk classes ($p < 0.05$).
@@ -180,21 +180,43 @@ In the raw Kaggle s4e5 dataset, the continuous probability is a linear function 
 
 ## 📈 Test Results
 
-```
+```bash
 pytest tests/ -v
 ```
 ```
-tests/test_data_quality.py::test_no_global_row_aggregates PASSED
-tests/test_data_quality.py::test_no_nulls_in_splits PASSED
+tests/test_api.py::test_health_endpoint PASSED
+tests/test_api.py::test_predict_valid_input PASSED
+tests/test_api.py::test_predict_invalid_input_out_of_bounds PASSED
+tests/test_api.py::test_predict_missing_feature PASSED
+tests/test_api.py::test_predict_batch_endpoint PASSED
+tests/test_api.py::test_predict_negative_feature PASSED
+tests/test_api.py::test_model_info_endpoint PASSED
+tests/test_data_quality.py::test_dead_raw_csv_files_deleted PASSED
+tests/test_data_quality.py::test_splits_no_missing_or_infinite_values PASSED
+tests/test_data_quality.py::test_splits_are_completely_disjoint PASSED
+tests/test_data_quality.py::test_splits_are_raw_unscaled PASSED
+tests/test_data_quality.py::test_target_bins_file_validity PASSED
+tests/test_data_quality.py::test_no_row_proxy_features PASSED
 tests/test_leakage.py::test_no_aggregate_hazard_index_in_splits PASSED
 tests/test_leakage.py::test_domain_feature_adder_no_global_row_aggregates PASSED
 tests/test_leakage.py::test_no_target_proxy_correlation_exceeds_threshold PASSED
 tests/test_leakage.py::test_engineered_features_correlation_below_threshold PASSED
 tests/test_leakage.py::test_no_global_row_aggregates_in_engineered_features PASSED
+tests/test_monitoring.py::test_ks_drift_detects_shift PASSED
+tests/test_monitoring.py::test_ks_drift_no_shift PASSED
+tests/test_monitoring.py::test_psi_stable_on_same_distribution PASSED
+tests/test_monitoring.py::test_psi_detects_shift PASSED
+tests/test_monitoring.py::test_check_all_features PASSED
 tests/test_pipeline.py::test_pipeline_accepts_raw_unscaled_inputs PASSED
 tests/test_pipeline.py::test_predict_single_instance_dictionary PASSED
 tests/test_pipeline.py::test_batch_inference_consistency PASSED
 tests/test_pipeline.py::test_sha256_checksum_security_verification PASSED
+tests/test_streamlit_utils.py::test_get_page_config PASSED
+tests/test_streamlit_utils.py::test_pages_metadata_consistency PASSED
+tests/test_streamlit_utils.py::test_app_dashboard_apptest PASSED
+tests/test_streamlit_utils.py::test_pages_apptest PASSED
+
+============================= 31 passed in 10.61s =============================
 ```
 
 ---
@@ -238,6 +260,35 @@ python main.py
 streamlit run app/dashboard.py
 ```
 Then navigate to `http://localhost:8501` and use the sidebar to explore all 6 pages.
+
+### 6. Launch the REST API (FastAPI)
+```bash
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+Interactive API docs are available at `http://localhost:8000/docs`.
+
+**Health Check:**
+```bash
+curl http://localhost:8000/health
+```
+
+**Single Prediction:**
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"MonsoonIntensity": 12.0, "TopographyDrainage": 10.0, "RiverManagement": 9.0, "Deforestation": 9.0, "Urbanization": 10.0, "ClimateChange": 11.0, "DamsQuality": 11.0, "Siltation": 10.0, "AgriculturalPractices": 8.0, "Encroachments": 9.0, "IneffectiveDisasterPreparedness": 10.0, "DrainageSystems": 9.0, "CoastalVulnerability": 8.0, "Landslides": 8.0, "Watersheds": 9.0, "DeterioratingInfrastructure": 10.0, "PopulationScore": 10.0, "WetlandLoss": 9.0, "InadequatePlanning": 10.0, "PoliticalFactors": 8.0}'
+```
+
+### 7. Deploy to Streamlit Community Cloud
+AquaSense is pre-configured for 1-click deployment on Streamlit Community Cloud:
+- **Main file path**: `app/dashboard.py`
+- **Python version**: `3.11`
+- **RAM footprint**: ~250 MB (well below Cloud's 1 GB tier limit)
+- **Detailed Guide**: See [DEPLOY.md](DEPLOY.md) for step-by-step deployment instructions.
+
+> [!NOTE]
+> **GitHub Repository Rebranding**:
+> To complete the rebrand on GitHub: Navigate to your repository **Settings** → **General** → **Repository name**, type `aquasense` (or `AquaSense`), and click **Rename**. GitHub will automatically preserve Git redirects. All internal Python package paths (`src/`, `app/`, `api/`) remain unchanged.
 
 ---
 
