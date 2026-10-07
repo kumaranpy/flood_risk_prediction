@@ -93,6 +93,16 @@ PRESETS = {
 }
 
 
+from app.utils import (
+    inject_theme,
+    hero,
+    render_disclaimer,
+    render_sidebar_navigation,
+    render_footer,
+    create_risk_gauge_chart,
+)
+
+
 @st.cache_resource
 def load_ml_assets():
     """Securely loads and verifies the trained ML pipeline artifact."""
@@ -103,13 +113,13 @@ def load_ml_assets():
 
 def main():
     st.set_page_config(
-        page_title="Flood Risk Intelligence Dashboard",
+        page_title="AquaSense · Flood Intelligence",
         page_icon="🌊",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
-    inject_global_css()
+    inject_theme()
 
     # Load Assets with Security Error Handling
     try:
@@ -121,12 +131,12 @@ def main():
         st.error(f"Failed to load ML pipeline: {err}")
         st.stop()
 
-    # Hero Banner
-    render_hero(
-        title="Regional Flood Risk Intelligence System",
-        subtitle="Real-time ML risk assessment classifying regions into Low, Medium, or High categories using calibrated ensemble pipelines trained on synthetic benchmark environmental factors.",
-        badge_text="🛡️ Academic AI Benchmark & Simulation",
-        badge_class="badge-simulation"
+    # AquaSense Hero Banner
+    hero(
+        title="AquaSense",
+        subtitle="Intelligent Flood Risk Intelligence — Real-time predictive risk assessment with calibrated models & zero proxy leakage.",
+        badge_text="🛡️ AI Simulation Benchmark",
+        badge_class="badge-simulation",
     )
 
     # MANDATORY DISCLAIMER BANNER (F-10 / Operational Safety)
@@ -146,6 +156,18 @@ def main():
         st.markdown("<h3 style='color:#F1F5F9; font-weight:700; margin-bottom:12px;'>🎛️ Regional Factor Inputs</h3>", unsafe_allow_html=True)
         st.caption("Adjust factor values (Scale: 0.0 - 15.0) to simulate environmental and infrastructure conditions.")
 
+        st.markdown("<p style='font-size:0.85rem; color:#94A3B8; font-weight:600; margin-bottom:6px;'>⚡ Quick Scenario Presets:</p>", unsafe_allow_html=True)
+        preset_cols = st.columns(len(PRESETS))
+        for idx, (p_name, p_vals) in enumerate(PRESETS.items()):
+            with preset_cols[idx]:
+                if st.button(p_name, key=f"btn_preset_{idx}", use_container_width=True):
+                    for k, v in p_vals.items():
+                        st.session_state.input_state[k] = v
+                        if f"slider_{k}" in st.session_state:
+                            st.session_state[f"slider_{k}"] = v
+                    st.rerun()
+
+        st.write("")
         tab1, tab2, tab3 = st.tabs([
             "🌧️ Meteorology & Catchment",
             "🏗️ Infrastructure & Defenses",
@@ -260,23 +282,26 @@ def main():
             unsafe_allow_html=True,
         )
 
-        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+        # Large Plotly Risk Gauge
+        risk_score = prob_dict.get("High", 0.0) * 100.0 + prob_dict.get("Medium", 0.0) * 50.0 + prob_dict.get("Low", 0.0) * 10.0
+        gauge_fig = create_risk_gauge_chart(risk_score, pred_class, confidence)
+        st.plotly_chart(gauge_fig, use_container_width=True, config={"displayModeBar": False})
 
         # Calibrated Probability Breakdown
-        st.markdown("<h4 style='color:#E2E8F0; font-weight:700; margin-bottom:12px;'>🎯 Calibrated Probabilities</h4>", unsafe_allow_html=True)
-        bar_colors = {"Low": "#10B981", "Medium": "#F59E0B", "High": "#EF4444"}
+        st.markdown("<h4 style='color:#E2E8F0; font-weight:700; margin-bottom:12px;'>🎯 Calibrated Probability Distribution</h4>", unsafe_allow_html=True)
+        bar_colors = {"Low": "#34D399", "Medium": "#FBBF24", "High": "#F43F5E"}
         for cls in ["High", "Medium", "Low"]:
             prob_val = prob_dict.get(cls, 0.0)
             pct_val = prob_val * 100.0
-            fill_color = bar_colors.get(cls, "#38BDF8")
+            fill_color = bar_colors.get(cls, "#22D3EE")
             st.markdown(
                 f"""
-                <div class="prob-row">
-                    <span style="color: #F1F5F9;">{cls} Risk</span>
-                    <span style="font-family: 'JetBrains Mono', monospace; color: {fill_color};">{pct_val:5.1f}%</span>
+                <div style="display:flex; justify-content:space-between; font-size:0.88rem; font-weight:600; margin-bottom:2px;">
+                    <span style="color: #E6F1FF;">{cls} Risk Probability</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; color: {fill_color}; font-weight:700;">{pct_val:5.1f}%</span>
                 </div>
-                <div class="prob-bar-container">
-                    <div class="prob-bar-fill" style="width: {pct_val}%; background: {fill_color};"></div>
+                <div class="prob-bar-track">
+                    <div class="prob-bar-fill" style="width: {max(pct_val, 2.0)}%; background: {fill_color};"></div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -289,7 +314,7 @@ def main():
             st.markdown(
                 f"""
                 <div class="glass-card" style="text-align:center;">
-                    <div class="metric-val" style="color: #38BDF8;">{domain_feats.get('Environmental_Risk', 5.0):.2f}</div>
+                    <div class="metric-val" style="color: #22D3EE;">{domain_feats.get('Environmental_Risk', 5.0):.2f}</div>
                     <div class="metric-lbl">Environmental</div>
                 </div>
                 """,
@@ -299,7 +324,7 @@ def main():
             st.markdown(
                 f"""
                 <div class="glass-card" style="text-align:center;">
-                    <div class="metric-val" style="color: #F59E0B;">{domain_feats.get('Infrastructure_Vulnerability', 5.0):.2f}</div>
+                    <div class="metric-val" style="color: #FBBF24;">{domain_feats.get('Infrastructure_Vulnerability', 5.0):.2f}</div>
                     <div class="metric-lbl">Infrastructure</div>
                 </div>
                 """,
@@ -309,7 +334,7 @@ def main():
             st.markdown(
                 f"""
                 <div class="glass-card" style="text-align:center;">
-                    <div class="metric-val" style="color: #A855F7;">{domain_feats.get('Anthropogenic_Pressure', 5.0):.2f}</div>
+                    <div class="metric-val" style="color: #38BDF8;">{domain_feats.get('Anthropogenic_Pressure', 5.0):.2f}</div>
                     <div class="metric-lbl">Anthropogenic</div>
                 </div>
                 """,
@@ -353,6 +378,9 @@ def main():
             - **Cryptographic Guardrails**: SHA-256 verified deserialization blocks untrusted pickles.
             """
         )
+
+    # Standardized AquaSense Footer
+    render_footer()
 
 
 if __name__ == "__main__":

@@ -12,13 +12,23 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.utils import (
+    inject_theme,
+    hero,
+    render_disclaimer,
+    render_footer,
+    render_sidebar_navigation,
+)
+
 # Page config
 st.set_page_config(
-    page_title="Data Story | Flood Risk Intelligence",
+    page_title="AquaSense · Data Story",
     page_icon="🌊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_theme()
 
 # Custom CSS
 st.markdown(
@@ -79,28 +89,16 @@ st.markdown(
 
 
 def main():
-    # Hero
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
-                    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 32px; margin-bottom: 24px;">
-            <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(139, 92, 246, 0.15);
-                        color: #A78BFA; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 9999px;
-                        padding: 4px 14px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
-                        text-transform: uppercase; margin-bottom: 12px;">
-                📖 Data Story & Domain Context
-            </div>
-            <h1 style="margin: 0 0 8px 0; font-size: 2.5rem; font-weight: 800; color: #FFFFFF; line-height: 1.2;">
-                Why Flood Risk Intelligence Matters
-            </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 1.05rem; max-width: 900px; line-height: 1.6;">
-                Understanding the hydrological, infrastructural, and anthropogenic drivers of flood vulnerability
-                through data science and machine learning.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_sidebar_navigation()
+
+    # AquaSense Hero
+    hero(
+        title="AquaSense · Data Story",
+        subtitle="Why Flood Risk Intelligence Matters — Hydrological, infrastructural, and anthropogenic vulnerability drivers.",
+        badge_text="📖 Domain Story & Context",
+        badge_class="badge-simulation",
     )
+    render_disclaimer()
     
     # Load data for stats
     train_path = PROJECT_ROOT / "data" / "splits" / "train.csv"
@@ -274,10 +272,11 @@ def main():
                         Siltation_Pressure, Preparedness_Deficit
                     </div>
                 </div>
-                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 16px;">
-                    <div style="font-weight: 700; color: #A78BFA; margin-bottom: 8px;">📊 Row Statistics (1)</div>
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px;">
+                    <div style="font-weight: 700; color: #10B981; margin-bottom: 8px;">🛡️ Zero Proxy Leakage</div>
                     <div style="color: #94A3B8; font-size: 0.9rem;">
-                        Row_Mean (captures S4E5 linear target structure)
+                        Row_Sum / Row_Mean eliminated;<br>
+                        all predictors strictly verified |r| &lt; 0.85
                     </div>
                 </div>
             </div>
@@ -302,8 +301,8 @@ def main():
             <ul style="color: #E2E8F0; line-height: 1.8;">
                 <li><strong>Linear models</strong> naturally learn the correct decision boundary with minimal overfitting</li>
                 <li><strong>Tree ensembles</strong> waste capacity learning axis-aligned splits to approximate diagonal boundaries</li>
-                <li><strong>Engineered interactions & ratios</strong> give linear models the non-linear expressiveness they need without tree overfitting</li>
-                <li><strong>Result:</strong> Logistic Regression achieves 98.24% accuracy with excellent calibration (Brier = 0.0355)</li>
+                <li><strong>Engineered interactions & ratios</strong> give linear models non-linear expressiveness without tree overfitting</li>
+                <li><strong>Result:</strong> Leakage-free Logistic Regression achieves <strong>71.34% accuracy</strong> (0.7130 F1, 0.8781 ROC-AUC) on the held-out test split, outperforming tree alternatives while eliminating circular target leakage</li>
             </ul>
         </div>
         """,
@@ -319,7 +318,7 @@ def main():
                 <h4 style="color: #FCA5A5; margin-bottom: 12px;">🔴 Critical Limitations</h4>
                 <ul style="color: #FCA5A5; line-height: 1.8;">
                     <li><strong>Synthetic Data Only:</strong> Trained on Kaggle S4E5 benchmark — NOT real hydrological observations</li>
-                    <li><strong>Scale-Shift Fragility:</strong> 1.5× feature scaling drops F1 from 0.98 to 0.18 — model learns magnitudes, not relationships</li>
+                    <li><strong>Scale-Shift Fragility:</strong> 1.5× feature scaling drops F1 from 0.71 to 0.22 — model learns magnitudes, not scale-invariant relationships</li>
                     <li><strong>No Temporal Dynamics:</strong> Static snapshot; real floods evolve over hours/days</li>
                     <li><strong>No Spatial Dependencies:</strong> Regions treated independently; ignores watershed connectivity</li>
                     <li><strong>Class Balance Assumption:</strong> Real-world flood events are rare (severe class imbalance)</li>
@@ -367,6 +366,8 @@ def main():
                 """,
                 unsafe_allow_html=True,
             )
+
+    render_footer()
 
 
 if __name__ == "__main__":

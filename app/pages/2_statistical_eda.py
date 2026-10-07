@@ -24,15 +24,24 @@ from src.statistical_audit import (
     gaussian_noise_stress_test,
 )
 from src.predict import load_verified_pipeline, SecurityError
+from app.utils import (
+    inject_theme,
+    hero,
+    render_disclaimer,
+    render_footer,
+    render_sidebar_navigation,
+)
 
 
 # Page config
 st.set_page_config(
-    page_title="Statistical EDA | Flood Risk Intelligence",
-    page_icon="📊",
+    page_title="AquaSense · Statistical EDA",
+    page_icon="🌊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_theme()
 
 
 # Custom CSS
@@ -114,8 +123,8 @@ def run_vif(X_train):
 
 
 @st.cache_data
-def run_ablation(pipeline, X_test, y_test, domain_features):
-    return feature_ablation_study(pipeline, X_test, y_test, domain_features)
+def run_ablation(_pipeline, X_test, y_test, domain_features):
+    return feature_ablation_study(_pipeline, X_test, y_test, domain_features)
 
 
 @st.cache_data
@@ -124,8 +133,8 @@ def run_ks_drift(X_train, X_test):
 
 
 @st.cache_data
-def run_noise_stress(pipeline, X_test, y_test):
-    return gaussian_noise_stress_test(pipeline, X_test, y_test)
+def run_noise_stress(_pipeline, X_test, y_test):
+    return gaussian_noise_stress_test(_pipeline, X_test, y_test)
 
 
 def format_p_value(p):
@@ -155,27 +164,16 @@ def render_vif_badge(vif):
 
 
 def main():
-    # Hero
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
-                    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 24px 32px; margin-bottom: 20px;">
-            <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15);
-                        color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 9999px;
-                        padding: 4px 14px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
-                        text-transform: uppercase; margin-bottom: 10px;">
-                📊 Statistical Inference & Feature Validation
-            </div>
-            <h1 style="margin: 0 0 6px 0; font-size: 2rem; font-weight: 800; color: #FFFFFF;">
-                Rigorous Feature Science
-            </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 0.95rem; max-width: 900px;">
-                ANOVA · Chi-Square · VIF · Feature Ablation · Distribution Drift · Stress Testing
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_sidebar_navigation()
+
+    # AquaSense Hero
+    hero(
+        title="AquaSense · Statistical EDA",
+        subtitle="Hypothesis testing, collinearity diagnostics, distribution drift, and noise stress tests.",
+        badge_text="📊 Rigorous Feature Science",
+        badge_class="badge-simulation",
     )
+    render_disclaimer()
     
     # Load assets
     with st.spinner("Loading pipeline and data..."):
@@ -226,8 +224,7 @@ def main():
         # Display table
         display_df = anova_df.copy()
         display_df["p_value"] = display_df["p_value"].apply(format_p_value)
-        display_df["f_statistic"] = display_df["f_statistic"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
-        display_df["significant"] = display_df["p_value"].apply(lambda p: "✅" if p != "N/A" and float(p) < 0.05 else "❌" if p != "N/A" else "❓")
+        display_df["significant"] = anova_df["significant"].apply(lambda s: "✅" if s else "❌")
         
         st.dataframe(
             display_df[["feature", "f_statistic", "p_value", "significant"]],
@@ -265,8 +262,7 @@ def main():
         
         display_df = chi2_df.copy()
         display_df["p_value"] = display_df["p_value"].apply(format_p_value)
-        display_df["chi2_statistic"] = display_df["chi2_statistic"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
-        display_df["significant"] = display_df["p_value"].apply(lambda p: "✅" if p != "N/A" and float(p) < 0.05 else "❌" if p != "N/A" else "❓")
+        display_df["significant"] = chi2_df["significant"].apply(lambda s: "✅" if s else "❌")
         
         st.dataframe(
             display_df[["feature", "chi2_statistic", "p_value", "dof", "significant"]],
@@ -333,8 +329,9 @@ def main():
             st.metric("🟢 Low (<5)", int(low))
         
         display_df = vif_df.copy()
+        concern_emojis = {"SEVERE": "🔴 SEVERE", "MODERATE": "🟡 MODERATE", "LOW": "🟢 LOW", "ERROR": "❓ ERROR"}
+        display_df["concern_level"] = display_df["concern_level"].apply(lambda c: concern_emojis.get(c, str(c)))
         display_df["VIF"] = display_df["VIF"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
-        display_df["concern"] = display_df["VIF"].apply(render_vif_badge)
         
         st.dataframe(
             display_df[["feature", "VIF", "concern_level"]],
@@ -426,9 +423,9 @@ def main():
         st.metric("Baseline F1-Weighted", f"{baseline_f1:.4f}")
         
         display_df = noise_df.copy()
-        display_df["f1_weighted_mean"] = display_df["f1_weighted_mean"].apply(lambda x: f"{x:.4f}")
-        display_df["f1_weighted_std"] = display_df["f1_weighted_std"].apply(lambda x: f"{x:.4f}")
-        display_df["degradation"] = (baseline_f1 - display_df["f1_weighted_mean"]).apply(lambda x: f"{x:+.4f}")
+        display_df["degradation"] = (baseline_f1 - noise_df["f1_weighted_mean"]).apply(lambda x: f"{x:+.4f}")
+        display_df["f1_weighted_mean"] = noise_df["f1_weighted_mean"].apply(lambda x: f"{x:.4f}")
+        display_df["f1_weighted_std"] = noise_df["f1_weighted_std"].apply(lambda x: f"{x:.4f}")
         
         st.dataframe(
             display_df[["noise_level", "f1_weighted_mean", "f1_weighted_std", "degradation"]],
@@ -464,6 +461,8 @@ def main():
             )
     else:
         st.info("Run the full pipeline to generate the combined audit report.")
+
+    render_footer()
 
 
 if __name__ == "__main__":

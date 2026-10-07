@@ -15,14 +15,23 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.predict import load_verified_pipeline, SecurityError
+from app.utils import (
+    inject_theme,
+    hero,
+    render_disclaimer,
+    render_footer,
+    render_sidebar_navigation,
+)
 
 # Page config
 st.set_page_config(
-    page_title="Feature Importance | Flood Risk Intelligence",
-    page_icon="🔍",
+    page_title="AquaSense · Feature Attribution",
+    page_icon="🌊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_theme()
 
 # Custom CSS
 st.markdown(
@@ -101,22 +110,16 @@ def load_assets():
 
 
 def main():
-    # Hero
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
-                    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 32px; margin-bottom: 24px;">
-            <div class="shap-badge">🔍 SHAP Explainability & Feature Attribution</div>
-            <h1 style="margin: 0 0 8px 0; font-size: 2.5rem; font-weight: 800; color: #FFFFFF; line-height: 1.2;">
-                Why Did the Model Predict This?
-            </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 1.05rem; max-width: 900px; line-height: 1.6;">
-                Global feature importance, local explanations, and SHAP value deep dives for calibrated probabilities.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_sidebar_navigation()
+
+    # AquaSense Hero
+    hero(
+        title="AquaSense · Feature Attribution",
+        subtitle="Why did the model predict this? Global feature importance, local explanations, and SHAP value deep dives.",
+        badge_text="🔍 SHAP Explainability",
+        badge_class="badge-simulation",
     )
+    render_disclaimer()
     
     # Load assets
     with st.spinner("Loading pipeline and computing SHAP values..."):
@@ -131,13 +134,13 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         if shap_summary_path.exists():
-            st.image(str(shap_summary_path), caption="SHAP Summary: Feature Importance by Class", use_container_width=True)
+            st.image(str(shap_summary_path), caption="SHAP Summary: Feature Importance by Class", use_column_width=True)
         else:
             st.info("SHAP summary not found. Run the full pipeline to generate.")
     
     with col2:
         if shap_waterfall_path.exists():
-            st.image(str(shap_waterfall_path), caption="SHAP Waterfall: High-Risk Sample Explanation", use_container_width=True)
+            st.image(str(shap_waterfall_path), caption="SHAP Waterfall: High-Risk Sample Explanation", use_column_width=True)
         else:
             st.info("SHAP waterfall not found. Run the full pipeline to generate.")
     
@@ -335,6 +338,8 @@ def main():
                     "statistical_audit.json",
                     "application/json"
                 )
+
+    render_footer()
 
 
 if __name__ == "__main__":

@@ -13,16 +13,25 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.predict import load_verified_pipeline, SecurityError, EXPECTED_RAW_FEATURES
+from src.predict import load_verified_pipeline, SecurityError, EXPECTED_RAW_FEATURES, predict_single_instance
 from src.features import compute_domain_features_dict
+from app.utils import (
+    inject_theme,
+    hero,
+    render_disclaimer,
+    render_footer,
+    render_sidebar_navigation,
+)
 
 # Page config
 st.set_page_config(
-    page_title="What-If Analysis | Flood Risk Intelligence",
-    page_icon="🔄",
+    page_title="AquaSense · What-If Planner",
+    page_icon="🌊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_theme()
 
 # Custom CSS
 st.markdown(
@@ -172,23 +181,16 @@ def format_delta(delta):
 
 
 def main():
-    # Hero
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
-                    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 32px; margin-bottom: 24px;">
-            <div class="scenario-badge">🔄 Counterfactual Policy Intervention Planner</div>
-            <h1 style="margin: 0 0 8px 0; font-size: 2.5rem; font-weight: 800; color: #FFFFFF; line-height: 1.2;">
-                What If We Changed the Conditions?
-            </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 1.05rem; max-width: 900px; line-height: 1.6;">
-                Simulate infrastructure investments, nature-based solutions, and policy reforms to quantify 
-                their impact on predicted flood risk probabilities.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_sidebar_navigation()
+
+    # AquaSense Hero
+    hero(
+        title="AquaSense · What-If Planner",
+        subtitle="Simulate infrastructure investments, nature-based solutions, and policy reforms to quantify risk reduction.",
+        badge_text="🔄 Scenario Planning",
+        badge_class="badge-simulation",
     )
+    render_disclaimer()
     
     # Load pipeline
     with st.spinner("Loading calibrated pipeline..."):
@@ -297,25 +299,16 @@ def main():
     )
     
     # Predict baseline
-    baseline_df = pd.DataFrame([st.session_state.baseline_inputs])
-    baseline_pred = pipeline.predict(baseline_df)[0]
-    baseline_prob = pipeline.predict_proba(baseline_df)[0]
-    int_to_class = {0: "Low", 1: "Medium", 2: "High"}
-    if isinstance(baseline_pred, (int, np.integer)):
-        baseline_class = int_to_class.get(int(baseline_pred), str(baseline_pred))
-    else:
-        baseline_class = str(baseline_pred)
-    baseline_high_prob = baseline_prob[2]  # High risk index
+    baseline_class, _, baseline_probs, _ = predict_single_instance(
+        st.session_state.baseline_inputs, pipeline=pipeline
+    )
+    baseline_high_prob = baseline_probs.get("High", 0.0)
     
     # Predict scenario
-    scenario_df = pd.DataFrame([st.session_state.scenario_inputs])
-    scenario_pred = pipeline.predict(scenario_df)[0]
-    scenario_prob = pipeline.predict_proba(scenario_df)[0]
-    if isinstance(scenario_pred, (int, np.integer)):
-        scenario_class = int_to_class.get(int(scenario_pred), str(scenario_pred))
-    else:
-        scenario_class = str(scenario_pred)
-    scenario_high_prob = scenario_prob[2]
+    scenario_class, _, scenario_probs, _ = predict_single_instance(
+        st.session_state.scenario_inputs, pipeline=pipeline
+    )
+    scenario_high_prob = scenario_probs.get("High", 0.0)
     
     # Display results
     col1, col2, col3 = st.columns(3)
@@ -331,7 +324,7 @@ def main():
                 <h2 style="margin: 0; color: #FFFFFF;">{baseline_class.upper()}</h2>
                 <p style="margin: 8px 0 0 0; color: #94A3B8;">P(High Risk) = {baseline_high_prob:.1%}</p>
                 <p style="margin: 4px 0 0 0; color: #94A3B8; font-size: 0.9rem;">
-                    Low: {baseline_prob[0]:.1%} | Med: {baseline_prob[1]:.1%} | High: {baseline_prob[2]:.1%}
+                    Low: {baseline_probs.get('Low', 0.0):.1%} | Med: {baseline_probs.get('Medium', 0.0):.1%} | High: {baseline_probs.get('High', 0.0):.1%}
                 </p>
             </div>
             """,
@@ -348,7 +341,7 @@ def main():
                 <h2 style="margin: 0; color: #FFFFFF;">{scenario_class.upper()}</h2>
                 <p style="margin: 8px 0 0 0; color: #94A3B8;">P(High Risk) = {scenario_high_prob:.1%}</p>
                 <p style="margin: 4px 0 0 0; color: #94A3B8; font-size: 0.9rem;">
-                    Low: {scenario_prob[0]:.1%} | Med: {scenario_prob[1]:.1%} | High: {scenario_prob[2]:.1%}
+                    Low: {scenario_probs.get('Low', 0.0):.1%} | Med: {scenario_probs.get('Medium', 0.0):.1%} | High: {scenario_probs.get('High', 0.0):.1%}
                 </p>
             </div>
             """,
@@ -426,10 +419,11 @@ def main():
                 "Baseline": f"{base_val:.2f}",
                 "Scenario": f"{scen_val:.2f}",
                 "Δ": f"{diff:+.2f}",
+                "_abs_diff": abs(diff),
             })
     
     if domain_data:
-        domain_df = pd.DataFrame(domain_data).sort_values("Δ", key=abs, ascending=False)
+        domain_df = pd.DataFrame(domain_data).sort_values("_abs_diff", ascending=False).drop(columns=["_abs_diff"])
         st.dataframe(domain_df, hide_index=True, use_container_width=True)
     
     # --- Intervention Summary ---
@@ -498,6 +492,8 @@ def main():
             "whatif_report.md",
             "text/markdown"
         )
+
+    render_footer()
 
 
 if __name__ == "__main__":

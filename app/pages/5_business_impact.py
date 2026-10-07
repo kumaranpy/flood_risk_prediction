@@ -13,15 +13,24 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.predict import load_verified_pipeline, SecurityError
+from src.predict import load_verified_pipeline, SecurityError, predict_single_instance
+from app.utils import (
+    inject_theme,
+    hero,
+    render_disclaimer,
+    render_footer,
+    render_sidebar_navigation,
+)
 
 # Page config
 st.set_page_config(
-    page_title="Business Impact | Flood Risk Intelligence",
-    page_icon="💰",
+    page_title="AquaSense · Business Impact",
+    page_icon="🌊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_theme()
 
 # Custom CSS
 st.markdown(
@@ -145,23 +154,16 @@ def compute_expected_annual_loss(
 
 
 def main():
-    # Hero
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, rgba(16, 24, 40, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
-                    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 32px; margin-bottom: 24px;">
-            <div class="roi-badge">💰 Business Impact & ROI Calculator</div>
-            <h1 style="margin: 0 0 8px 0; font-size: 2.5rem; font-weight: 800; color: #FFFFFF; line-height: 1.2;">
-                Financial Case for Early Warning Investment
-            </h1>
-            <p style="margin: 0; color: #94A3B8; font-size: 1.05rem; max-width: 900px; line-height: 1.6;">
-                Quantify the return on investment for flood early warning systems using regional risk profiles 
-                and calibrated probability outputs.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_sidebar_navigation()
+
+    # AquaSense Hero
+    hero(
+        title="AquaSense · Business Impact",
+        subtitle="Financial Case for Early Warning Investment — Quantify ROI, NPV savings, and asset loss mitigation.",
+        badge_text="💰 Economic Evaluation",
+        badge_class="badge-simulation",
     )
+    render_disclaimer()
     
     # Load pipeline
     with st.spinner("Loading calibrated pipeline..."):
@@ -224,8 +226,8 @@ def main():
             "Watersheds": 7.0, "DeterioratingInfrastructure": 8.0, "PopulationScore": 8.0,
             "WetlandLoss": 7.0, "InadequatePlanning": 8.0, "PoliticalFactors": 6.0,
         }
-        prob = pipeline.predict_proba(pd.DataFrame([sample_high]))[0]
-        model_high_prob = prob[2]
+        _, _, prob_dict, _ = predict_single_instance(sample_high, pipeline=pipeline)
+        model_high_prob = prob_dict.get("High", 0.0)
         
         st.metric("Model P(High Risk) - Sample Scenario", f"{model_high_prob:.1%}")
         
@@ -577,6 +579,8 @@ Not for operational use. For educational purposes only.*
             "roi_inputs.json",
             "application/json"
         )
+
+    render_footer()
 
 
 if __name__ == "__main__":
